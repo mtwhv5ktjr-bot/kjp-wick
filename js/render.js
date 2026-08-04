@@ -971,7 +971,7 @@ function drawGame(){
   for (const nz of LV.noises){
     if (nz.r < 90) continue;
     g.strokeStyle = `rgba(140,200,255,${nz.t * 0.3 * clamp(nz.r / 200, 0, 1)})`; g.lineWidth = 2;
-    g.beginPath(); g.arc(nz.x, nz.y, nz.r * (1 - nz.t / 0.5) + 12, 0, TAU); g.stroke();
+    g.beginPath(); g.arc(nz.x, nz.y, Math.max(0, nz.r * (1 - nz.t / 0.5) + 12), 0, TAU); g.stroke();
   }
   /* cones — punch the lightmap now (flashlights), tint later above the dark */
   const margin = 420;
@@ -1062,8 +1062,13 @@ function drawGame(){
   /* fx */
   for (const f of LV.fx){
     if (f.kind === "ring"){
-      g.strokeStyle = f.col; g.lineWidth = 2.4; g.globalAlpha = Math.min(1, f.t * 2);
-      g.beginPath(); g.arc(f.x, f.y, (0.5 - f.t) * 96 + 8, 0, TAU); g.stroke(); g.globalAlpha = 1;
+      /* CLAMPED. This expression goes NEGATIVE for any ring born with t > 0.58
+         — the EMP gadget uses t:0.6 — and a negative radius makes arc() THROW,
+         which kills the whole render and freezes the game mid-op. Never let a
+         computed radius reach the canvas unguarded. */
+      const rr2 = Math.max(0, (0.5 - f.t) * 96 + 8);
+      g.strokeStyle = f.col; g.lineWidth = 2.4; g.globalAlpha = clamp(f.t * 2, 0, 1);
+      g.beginPath(); g.arc(f.x, f.y, rr2, 0, TAU); g.stroke(); g.globalAlpha = 1;
     } else if (f.kind === "zzz"){
       g.fillStyle = f.col; g.globalAlpha = Math.min(1, f.t);
       g.font = "700 " + (10 + Math.sin(f.t * 5) * 2) + "px Verdana";
@@ -1074,7 +1079,7 @@ function drawGame(){
       g.restore();
     } else if (f.kind === "smoke"){
       g.fillStyle = `rgba(200,205,215,${Math.min(0.25, f.t * 0.4)})`;
-      g.beginPath(); g.arc(f.x, f.y, (0.6 - f.t) * 18 + 3, 0, TAU); g.fill();
+      g.beginPath(); g.arc(f.x, f.y, Math.max(0, (0.6 - f.t) * 18 + 3), 0, TAU); g.fill();
     } else if (f.kind === "spark"){
       g.fillStyle = f.col; g.globalAlpha = Math.min(1, f.t * 5);
       g.fillRect(f.x - 2, f.y - 2, 4, 4); g.globalAlpha = 1;

@@ -102,7 +102,25 @@ function frame(now, syncOnly){
   }
   if (!syncOnly){
     inputEndFrame();
-    requestAnimationFrame(frame);
+    requestAnimationFrame(safeFrame);           // guarded entry — see below
+  }
+}
+/* THE LOOP MUST NOT BE KILLABLE.
+   A single throw anywhere in update-or-draw used to escape before the
+   requestAnimationFrame at the end of frame(), so the chain was never
+   re-armed and the game froze permanently — which is exactly how a negative
+   arc() radius read as "the game crashed" to a player mid-op. Now one bad
+   frame costs one frame: it is logged once, the canvas state is unwound, and
+   the loop keeps running. */
+let _frameErrs = 0;
+function safeFrame(now){
+  try{
+    frame(now);
+  }catch(e){
+    if (_frameErrs++ < 5) console.error("frame error (recovered): " + (e && e.message), e);
+    try{ g.restore(); g.globalAlpha = 1; g.globalCompositeOperation = "source-over"; g.setTransform(1, 0, 0, 1, 0, 0); }catch(e2){}
+    inputEndFrame();
+    requestAnimationFrame(safeFrame);          // re-arm no matter what
   }
 }
 
@@ -114,5 +132,5 @@ reconcileSkin();
   if (/[?&]qa100=1/.test(q)){ runQA100(); STATE = "qa100"; }
   else if (/[?&]qa=1/.test(q)){ runQA(); STATE = "qa"; }
   else if (botN){ startBot(+botN); }
-  requestAnimationFrame(t => { lastT = t; frame(t); });
+  requestAnimationFrame(t => { lastT = t; safeFrame(t); });
 })();

@@ -300,8 +300,25 @@ function solveLevel(n){
       if (d.kind === "Y" || d.kind === "B" || d.kind === "R"){
         const c = d.kind.toLowerCase();
         const src = st.picks.some(p => p.k === "card" && p.card === c) || (def.guards || []).some(gd => gd.card === c);
-        if (!src) errs.push("door " + d.kind + " at " + d.x + "," + d.y + " has no card source");
+        if (!src) errs.push("door " + d.kind + " has no card source at " + d.x + "," + d.y);
       }
+    }
+    /* A DOOR MUST ACTUALLY BE SET IN A WALL.
+       The lobby shipped with its two BLUE elevator doors floating in open
+       floor — you simply walked around them, so the blue card gated nothing
+       and the level's whole objective was decorative. Reachability testing
+       never caught it, because walking around a door still "reaches" the
+       exit. Every door run must be capped by wall on one axis. */
+    const wallish = (xx, yy) => { const c = tileAt(xx, yy); return c === "#" || c === " " || c === "="; };
+    for (const d of st.doors){
+      let x0 = d.x; while (doorAtT(x0 - 1, d.y)) x0--;
+      let x1 = d.x; while (doorAtT(x1 + 1, d.y)) x1++;
+      let y0 = d.y; while (doorAtT(d.x, y0 - 1)) y0--;
+      let y1 = d.y; while (doorAtT(d.x, y1 + 1)) y1++;
+      const cappedH = wallish(x0 - 1, d.y) && wallish(x1 + 1, d.y);   // set into a horizontal wall
+      const cappedV = wallish(d.x, y0 - 1) && wallish(d.x, y1 + 1);   // set into a vertical wall
+      if (!cappedH && !cappedV)
+        errs.push("door " + d.kind + " at " + d.x + "," + d.y + " is NOT set in a wall — players walk around it");
     }
     const width0 = def.rows[0].length;
     if (def.rows.some(r => r.length !== width0)) warn.push("ragged rows (padded — cosmetic only)");
