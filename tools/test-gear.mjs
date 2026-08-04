@@ -74,9 +74,9 @@ eq(await gear.ownerOf(1), a.address, "owner");
 const t1 = Number(await gear.gearTypeOf(1));
 ok(t1 >= 1 && t1 <= 8, "type in 1..8");
 const rate = 1000n;
-const kjpPart = PRICE * 7500n / 10000n, wickPart = PRICE - kjpPart;
-eq(await KJPt.balanceOf(DEAD), kjpPart * rate, "75% of mint burned as KJP");
-eq(await WICKt.balanceOf(DEAD), wickPart * rate, "25% of mint burned as WICK");
+const kjpPart = PRICE * 5000n / 10000n, wickPart = PRICE - kjpPart;
+eq(await KJPt.balanceOf(DEAD), kjpPart * rate, "50% of mint burned as KJP");
+eq(await WICKt.balanceOf(DEAD), wickPart * rate, "50% of mint burned as WICK");
 eq(await balOf(G), 0n, "contract keeps ZERO PLS after clean mint");
 const burnEvents = r1.logs.filter(l => { try { return gear.interface.parseLog(l)?.name === "Burned"; } catch { return false; } });
 eq(burnEvents.length, 2, "two Burned events (KJP + WICK)");
@@ -99,9 +99,9 @@ const k2 = await KJPt.balanceOf(DEAD), w2 = await WICKt.balanceOf(DEAD);
 console.log("   pooled before crank:", ethers.formatEther(await balOf(G)));
 await (await gear.connect(a).burnPool(0, 0, GL)).wait();            // ANYONE can crank
 console.log("   pooled after crank :", ethers.formatEther(await balOf(G)));
-const kj = PRICE * 2n * 7500n / 10000n;
-eq((await KJPt.balanceOf(DEAD)) - k2, kj * rate, "crank burned 75% as KJP");
-eq((await WICKt.balanceOf(DEAD)) - w2, (PRICE * 2n - kj) * rate, "crank burned 25% as WICK");
+const kj = PRICE * 2n * 5000n / 10000n;
+eq((await KJPt.balanceOf(DEAD)) - k2, kj * rate, "crank burned 50% as KJP");
+eq((await WICKt.balanceOf(DEAD)) - w2, (PRICE * 2n - kj) * rate, "crank burned 50% as WICK");
 eq(await balOf(G), 0n, "pool drained");
 await reverts(gear.burnPool(0, 0, GL), "empty pool crank");
 
@@ -128,7 +128,7 @@ const uri = await gear.tokenURI(1);
 ok(uri.startsWith("data:application/json;base64,"), "on-chain tokenURI");
 const meta = JSON.parse(Buffer.from(uri.split(",")[1], "base64").toString());
 ok(/KJP GEAR #1/.test(meta.name), "name");
-ok(/75% burned as KJP/.test(meta.description), "pledge in metadata");
+ok(/50% burned as KJP/.test(meta.description), "pledge in metadata");
 ok(meta.image.startsWith("data:image/svg+xml;base64,"), "svg image");
 
 console.log("— sellout: distribution is supply-exact —");

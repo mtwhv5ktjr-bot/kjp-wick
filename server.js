@@ -48,6 +48,7 @@ http.createServer((req, res) => {
     return;
   }
   if (p === "/") p = "/index.html";
+  if (p === "/mint") p = "/mint.html";        // mirror the vercel.json rewrite
   const file = path.join(ROOT, path.normalize(p));
   if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, data) => {

@@ -333,7 +333,7 @@ const MODDEFS = {
    KJP GEAR — the 100-piece cross-game mint (KJPGear.sol). Field
    equipment, not attachments: it rides the OPERATIVE, so it works on
    every weapon including agency pickups, and every piece also works in
-   PEPE WICK. Mint proceeds: 75% buy&burn KJP + 25% buy&burn WICK,
+   PEPE WICK. Mint proceeds: 50% buy&burn KJP + 50% buy&burn WICK,
    automatic and withdraw-less. THE SUPPRESSOR LIVES HERE — no gun in
    the game ships silenced.
    ================================================================ */

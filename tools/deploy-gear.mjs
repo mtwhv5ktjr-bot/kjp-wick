@@ -19,7 +19,10 @@ const RPC        = process.env.RPC_URL     ?? "https://rpc.pulsechain.com";
 const BURN_ROUTER= process.env.BURN_ROUTER ?? "0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02"; // PulseX Router02
 const WPLS       = process.env.WPLS        ?? "0xA1077a294dDE1B09bB078844df40758a5D0f9a27";
 const WICK_TOKEN = process.env.WICK_TOKEN  ?? "0x8CDaf3d630Da9E1450832924D5701CC0500E9cfC"; // Green Wick
-const KJP_TOKEN  = process.env.KJP_TOKEN   ?? "";                                            // <- REQUIRED
+/* KJP — verified on PulseChain 2026-08-04: real ERC-20, name "Kenny John
+   Pierre", symbol KJP, 18 decimals, and getAmountsOut(WPLS->KJP) routes on
+   BOTH PulseX routers, so the 50% buy&burn leg can actually execute. */
+const KJP_TOKEN  = process.env.KJP_TOKEN   ?? "0x3848D41D6f439Ca645e9193c7680629A86B739ED";
 const PRICE      = ethers.parseEther(process.env.PRICE_PLS ?? "1000000");                    // 1,000,000 PLS per item
 
 const art = JSON.parse(readFileSync(join(root, "out", "KJPGear.json"), "utf8"));
@@ -30,8 +33,8 @@ console.log("KJP GEAR — deploy plan");
 console.log("  supply      100 (22/20/16/14/12/8/5/3)");
 console.log("  price       " + ethers.formatEther(PRICE) + " PLS per item  (max 5 per tx)");
 console.log("  gross       " + ethers.formatEther(PRICE * 100n) + " PLS if it sells out");
-console.log("  → KJP burn  " + ethers.formatEther(PRICE * 100n * 75n / 100n) + " PLS worth (75%)");
-console.log("  → WICK burn " + ethers.formatEther(PRICE * 100n * 25n / 100n) + " PLS worth (25%)");
+console.log("  → KJP burn  " + ethers.formatEther(PRICE * 100n * 50n / 100n) + " PLS worth (50%)");
+console.log("  → WICK burn " + ethers.formatEther(PRICE * 100n * 50n / 100n) + " PLS worth (50%)");
 console.log("  router      " + BURN_ROUTER);
 console.log("  WPLS        " + WPLS);
 console.log("  KJP token   " + (KJP_TOKEN || "‼ NOT SET — export KJP_TOKEN=0x…"));

@@ -19,11 +19,11 @@ pragma solidity ^0.8.24;
 
   THE PLEDGE, ENFORCED BY CODE — NOT BY TRUST:
     Every mint's PLS is split IN THE MINT TRANSACTION:
-      75% swapped on PulseX to the KJP token  -> sent to 0x...dEaD (burned)
-      25% swapped on PulseX to $WICK          -> sent to 0x...dEaD (burned)
+      50% swapped on PulseX to the KJP token  -> sent to 0x...dEaD (burned)
+      50% swapped on PulseX to $WICK          -> sent to 0x...dEaD (burned)
     There is NO withdraw function in this contract. If a swap fails (router
     hiccup) the PLS pools here and ANYONE can convert it with the public
-    burnPool() crank, at the same 75/25 split. Revenue has exactly two exits,
+    burnPool() crank, at the same 50/50 split. Revenue has exactly two exits,
     and both are burns.
 
   Type is drawn at mint from the remaining pool (prevrandao + minter + supply
@@ -74,7 +74,7 @@ contract KJPGear {
 
   uint256 public constant MAX_SUPPLY = 100;
   uint256 public constant MAX_PER_TX = 5;
-  uint256 public constant KJP_SHARE_BPS = 7500;   // 75% -> KJP burn, remainder -> WICK burn
+  uint256 public constant KJP_SHARE_BPS = 5000;   // 50% -> KJP burn, remainder -> WICK burn
 
   address public owner;
   bool public mintOpen;
@@ -102,8 +102,8 @@ contract KJPGear {
   address public constant BURN_ADDR = 0x000000000000000000000000000000000000dEaD;
   address public immutable burnRouter;   // PulseX V2-style router (address(0) = everything pools for burnPool)
   address public immutable burnPathIn;   // WPLS
-  address public immutable kjpToken;     // 75% of every mint becomes a KJP burn
-  address public immutable wickToken;    // 25% of every mint becomes a $WICK burn
+  address public immutable kjpToken;     // 50% of every mint becomes a KJP burn
+  address public immutable wickToken;    // 50% of every mint becomes a $WICK burn
 
   constructor(uint256 _price, address _router, address _wpls, address _kjp, address _wick) {
     owner = msg.sender;
@@ -123,7 +123,7 @@ contract KJPGear {
   function setMintPrice(uint256 p) external onlyOwner { mintPrice = p; }
   function transferOwnership(address to) external onlyOwner { require(to != address(0), "zero"); owner = to; }
 
-  // withdraw() is deliberately ABSENT. 75% KJP burn + 25% WICK burn is a
+  // withdraw() is deliberately ABSENT. 50% KJP burn + 50% WICK burn is a
   // property of the bytecode, not a promise.
 
   function _buyBurn(address tok, uint256 amount, uint256 minOut, bool viaMint) internal returns (bool) {
@@ -137,7 +137,7 @@ contract KJPGear {
       return true;
     } catch { return false; }
   }
-  /// split an amount 75/25 and burn both legs; wei-exact (KJP leg rounds down,
+  /// split an amount 50/50 and burn both legs; wei-exact (KJP leg rounds down,
   /// WICK leg takes the remainder — nothing is stranded by division)
   function _splitBurn(uint256 amount, uint256 minOutKjp, uint256 minOutWick, bool viaMint) internal {
     if (amount == 0) return;
@@ -147,7 +147,7 @@ contract KJPGear {
     // failed legs simply leave PLS on this contract for the burnPool crank
   }
   /// Anyone may convert pooled PLS (failed auto-burns, direct sends) into the
-  /// same 75/25 burn. Caller picks minOuts to defend against sandwiching.
+  /// same 50/50 burn. Caller picks minOuts to defend against sandwiching.
   function burnPool(uint256 minOutKjp, uint256 minOutWick) external {
     uint256 bal = address(this).balance;
     require(bal > 0, "nothing pooled");
@@ -294,12 +294,12 @@ contract KJPGear {
       "<text x='200' y='265' text-anchor='middle' font-family='Arial Black' font-size='26' fill='#e6f1ff'>", nm, "</text>",
       "<text x='200' y='380' text-anchor='middle' font-family='Verdana' font-size='15' fill='", acc, "'>", _rarity(t), "</text>",
       "<text x='200' y='452' text-anchor='middle' font-family='Verdana' font-size='11' fill='#57717f'>works in KJP + PEPE WICK</text>",
-      "<text x='200' y='478' text-anchor='middle' font-family='Verdana' font-size='11' fill='#57717f'>75% burned as KJP - 25% burned as WICK</text>",
+      "<text x='200' y='478' text-anchor='middle' font-family='Verdana' font-size='11' fill='#57717f'>50% burned as KJP - 50% burned as WICK</text>",
       "<text x='200' y='522' text-anchor='middle' font-family='Verdana' font-size='12' fill='#7cf9a5'>SEE YOU IN THE COURTROOM.</text>",
       "</svg>"));
     string memory json = string(abi.encodePacked(
       '{"name":"KJP GEAR #', _u(id), ' - ', nm,
-      '","description":"Cross-game field equipment for the WICK universe. Works in KJP (kjp.wick.pics) and PEPE WICK (games.wick.pics). Every mint: 75% burned as KJP, 25% burned as WICK - enforced by code, no withdraw exists.",',
+      '","description":"Cross-game field equipment for the WICK universe. Works in KJP (kjp.wick.pics) and PEPE WICK (games.wick.pics). Every mint: 50% burned as KJP, 50% burned as WICK - enforced by code, no withdraw exists.",',
       '"attributes":[{"trait_type":"Gear","value":"', nm,
       '"},{"trait_type":"Rarity","value":"', _rarity(t),
       '"}],"image":"data:image/svg+xml;base64,', B64g.encode(bytes(svg)), '"}'));

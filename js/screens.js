@@ -689,7 +689,7 @@ function drawArsenal(){
   g.fillText(gearOwned.length ? "✦ " + gearOwned.length + "/8 types held — no slots, it rides you"
                               : "works in KJP + PEPE WICK · mint at kjp-game.wick.pics/mint", wx, gy + 15);
   g.fillStyle = "#57717f";
-  g.fillText("75% buys & burns KJP · 25% buys & burns WICK", wx, gy + 29);
+  g.fillText("50% buys & burns KJP · 50% buys & burns WICK", wx, gy + 29);
   gy += 40;
   const cw2 = 160, ch2 = 56;
   for (let t = 1; t <= 8; t++){

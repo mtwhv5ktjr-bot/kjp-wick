@@ -2,9 +2,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>KJP GEAR — FIELD ISSUE · 100 pieces</title>
-<meta name="description" content="100 pieces of cross-game field equipment for the WICK universe. Works in KJP and PEPE WICK. Every mint burns 75% KJP and 25% WICK, automatically.">
+<meta name="description" content="100 pieces of cross-game field equipment for the WICK universe. Works in KJP and PEPE WICK. Every mint burns 50% KJP and 50% WICK, automatically.">
 <meta property="og:title" content="KJP GEAR — FIELD ISSUE">
-<meta property="og:description" content="Suppressors, kevlar, night optics, a skeleton key. 100 pieces, 1,000,000 PLS each. 75% burns KJP · 25% burns WICK — enforced by code.">
+<meta property="og:description" content="Suppressors, kevlar, night optics, a skeleton key. 100 pieces, 1,000,000 PLS each. 50% burns KJP · 50% burns WICK — enforced by code.">
 <meta name="theme-color" content="#05070c">
 <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="10" fill="%2305070c"/><text x="32" y="43" font-family="Arial Black,Arial" font-weight="900" font-size="24" fill="%23ffd27c" text-anchor="middle">KJP</text></svg>'>
 <style>
@@ -20,10 +20,10 @@
   .pledge b{color:#ffd27c}
   .split{display:flex;gap:10px;margin-top:12px;height:16px;border-radius:8px;overflow:hidden}
   .split i{display:block;height:100%}
-  .kjpbar{background:#ffd27c;width:75%}
-  .wickbar{background:#7cf9a5;width:25%}
+  .kjpbar{background:#ffd27c;width:50%}
+  .wickbar{background:#7cf9a5;width:50%}
   .legend{display:flex;gap:20px;font-size:11px;color:#8ba3b8;margin-top:8px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:14px;margin:26px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(252px,1fr));gap:16px;margin:26px 0}
   .card{border:1px solid #24303c;background:#0a0f15;border-radius:10px;padding:14px 15px}
   .card h3{margin:0 0 4px;font:900 14px Arial Black;color:#e6f1ff}
   .card .r{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#7c8ba3}
@@ -56,10 +56,10 @@
 
 <div class="pledge">
   <div><b>Every mint burns itself.</b> The PLS is split inside the mint transaction:
-  <b>75% buys &amp; burns KJP</b>, <b>25% buys &amp; burns WICK</b>, both straight to the dead address.
+  <b>50% buys &amp; burns KJP</b>, <b>50% buys &amp; burns WICK</b>, both straight to the dead address.
   There is <b>no withdraw function</b> in the contract — the split is bytecode, not a promise.</div>
   <div class="split"><i class="kjpbar"></i><i class="wickbar"></i></div>
-  <div class="legend"><span>■ 75% → KJP burn</span><span>■ 25% → WICK burn</span></div>
+  <div class="legend"><span>■ 50% → KJP burn</span><span>■ 50% → WICK burn</span></div>
 </div>
 
 <div class="box">
@@ -112,9 +112,29 @@ const GEAR = [
   { n:"SKELETON KEY",   r:"Epic",      pool:5,  kjp:"opens ANY locked door — no keycard",         pw:"+40% CASE from crates" },
   { n:"GOLD BRIEFCASE", r:"Legendary", pool:3,  kjp:"×1.25 score, every exhibit pays double",     pw:"+10% score" }
 ];
-document.getElementById("grid").innerHTML = GEAR.map(g => `
+/* The card face is generated ON-CHAIN by tokenURI(). This preview is the
+   SAME SVG the contract emits, so what you see here is literally the art you
+   receive — accent colour, rarity, pledge line and all. */
+const ACCENT = { Common:"#7cf9a5", Uncommon:"#8fc7ff", Rare:"#c792ff", Epic:"#ff9d5b", Legendary:"#ffd27c" };
+function cardSVG(name, rarity, id){
+  const a = ACCENT[rarity];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 560" style="width:100%;display:block;border-radius:8px">
+  <rect width="400" height="560" fill="#05070c"/>
+  <rect x="14" y="14" width="372" height="532" fill="none" stroke="${a}" stroke-width="3"/>
+  <text x="200" y="72" text-anchor="middle" font-family="Arial Black" font-size="30" fill="${a}">KJP GEAR</text>
+  <text x="200" y="108" text-anchor="middle" font-family="Verdana" font-size="13" fill="#8ba3b8">FIELD ISSUE ${id} / 100</text>
+  <rect x="60" y="170" width="280" height="170" fill="none" stroke="${a}" stroke-width="2"/>
+  <text x="200" y="265" text-anchor="middle" font-family="Arial Black" font-size="${name.length>13?21:26}" fill="#e6f1ff">${name}</text>
+  <text x="200" y="380" text-anchor="middle" font-family="Verdana" font-size="15" fill="${a}">${rarity}</text>
+  <text x="200" y="452" text-anchor="middle" font-family="Verdana" font-size="11" fill="#57717f">works in KJP + PEPE WICK</text>
+  <text x="200" y="478" text-anchor="middle" font-family="Verdana" font-size="11" fill="#57717f">50% burned as KJP - 50% burned as WICK</text>
+  <text x="200" y="522" text-anchor="middle" font-family="Verdana" font-size="12" fill="#7cf9a5">SEE YOU IN THE COURTROOM.</text>
+</svg>`;
+}
+document.getElementById("grid").innerHTML = GEAR.map((g, i) => `
   <div class="card ${g.r}">
-    <h3>${g.n}</h3>
+    ${cardSVG(g.n, g.r, "??")}
+    <h3 style="margin-top:11px">${g.n}</h3>
     <div class="r">${g.r}</div>
     <p><b style="color:#7cf9a5">KJP</b> — ${g.kjp}</p>
     <p><b style="color:#8fc7ff">PEPE WICK</b> — ${g.pw}</p>
@@ -185,7 +205,7 @@ $("mintBtn").onclick = async () => {
     say("confirm in your wallet…");
     const tx = await window.ethereum.request({ method:"eth_sendTransaction", params:[{
       from: acct, to: GEAR_ADDR, value: "0x" + value.toString(16), data }] });
-    say("minting… " + tx.slice(0,10) + "  (75% of that is already burning KJP)", "good");
+    say("minting… " + tx.slice(0,10) + "  (half of that is already burning KJP, half burning WICK)", "good");
     const poll = setInterval(async () => {
       const r = await rpc("eth_getTransactionReceipt", [tx]).catch(() => null);
       if (!r) return;
