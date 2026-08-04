@@ -53,14 +53,16 @@ const LEVELS = [null, // 1-indexed
   objText: () => "Reach the SERVICE CORRIDOR. Yellow card, the east door… or the vent.",
   lore: [
     "EXHIBIT A — gate log: the same black SUV, every new moon, no plates, waved through.",
-    "EXHIBIT B — invoice: 'landscaping', $40M a year. The hedges are LISTENING.",
+    "EXHIBIT B — evidence intake, YOUR case: two kilos logged into Langley. Never logged out.",
     "EXHIBIT C — memo, 1974: 'the fence is not to keep them out. It is to keep it IN.'"
   ],
   brief: [
-    { w: "op", t: "Counselor. Langley perimeter — two guard huts, cameras on both service doors." },
-    { w: "kjp", t: "Twelve years I ran their errands. Tonight I audit the firm." },
-    { w: "op", t: "Every floor of that building hides a different lie. Follow the paper all the way DOWN — it ends at something they buried in 2011. A wallet. And a woman." },
-    { w: "op", t: "Hold C to sneak. F knocks — or flicks a coin where you aim. E chokes from behind. Twelve darts, counselor. Spend them like billable hours." },
+    { w: "rg", t: "Kenny. Regina Gyatt. You're on the Langley fence line and I'm the only friend you have left, so listen." },
+    { w: "kjp", t: "You're supposed to be dead, Regina." },
+    { w: "rg", t: "And you're supposed to be a felon. They planted two kilos in your car, printed the story, and took your licence. The same building is holding BOTH halves of the lie — the product they framed you with, and the money it made them." },
+    { w: "kjp", t: "The bitcoin." },
+    { w: "rg", t: "A million coins of laundered street money, and one evidence bag with your name on the tag. Bring me both and you don't just walk — you take the whole firm to court." },
+    { w: "rg", t: "Hold C to sneak. F knocks, or flicks a coin where you aim. E chokes from behind. Twelve darts, counselor. Spend them like billable hours." },
     { w: "kjp", t: "Objection noted. Overruled. Going in." }
   ]
 },
@@ -116,10 +118,10 @@ const LEVELS = [null, // 1-indexed
     "EXHIBIT E — badge printer queue: 'INTERN (age 61)' ×12."
   ],
   brief: [
-    { w: "op", t: "The atrium. Check the visitor logs while you're down there — half the press corps has a hard pass. CONSPIRACY ONE, counselor: the news writes itself. In this building." },
+    { w: "rg", t: "The atrium. Check the visitor logs while you're down there — half the press corps has a hard pass. CONSPIRACY ONE, counselor: the news writes itself. In this building." },
     { w: "kjp", t: "And the analysts?" },
-    { w: "op", t: "Civilians. If they make you — or FIND YOUR WORK — they sprint for the wall panels, and a pulled alarm brings a QRF through the doors shooting. Aim at one and they freeze. Don't hurt them." },
-    { w: "op", t: "Metal detectors span the floor line — lethal iron RINGS them. The ceramic HUSH-9 walks through clean. Or take the coat-room vent." },
+    { w: "rg", t: "Civilians. If they make you — or FIND YOUR WORK — they sprint for the wall panels, and a pulled alarm brings a QRF through the doors shooting. Aim at one and they freeze. Don't hurt them." },
+    { w: "rg", t: "Metal detectors span the floor line — lethal iron RINGS them. The ceramic HUSH-9 walks through clean. Or take the coat-room vent." },
     { w: "kjp", t: "I never hurt witnesses. Witnesses are MINE." }
   ]
 },
@@ -176,13 +178,15 @@ const LEVELS = [null, // 1-indexed
   objText: s => s.hacks < 1 ? "Hack the IT TERMINAL in the glass room — it owns every camera on this floor." : "RED card opens the stairwell, top-left. The floor chief carries one too.",
   lore: [
     "EXHIBIT F — quota sheet: '40,000 posts/day minimum. Organic tone MANDATORY.'",
-    "EXHIBIT G — trend calendar: next quarter's 'spontaneous' movements, pre-approved.",
+    "EXHIBIT G — campaign folder 'PIERRE, K.J.' — 9,400 posts. Budget approved two weeks BEFORE the arrest.",
     "EXHIBIT H — ticker watchlist, circled in red: WICK. Note: 'containment failed.'"
   ],
   brief: [
-    { w: "op", t: "Analytics. CONSPIRACY TWO: every 'organic' trend since 2016 was typed on this floor. The botfarms, the fan wars, the meme cycles — payroll, all of it." },
-    { w: "kjp", t: "They minted the meme. Discovery phase — I read everything they wrote." },
-    { w: "op", t: "You're in the sub-floor — the VENT is your way up, stay low in it. Hack the glass IT room and every camera on the floor dies. The floor chief walks the RED stairwell card." },
+    { w: "rg", t: "Analytics. CONSPIRACY TWO: every 'organic' trend since 2016 was typed on this floor. Botfarms, fan wars, meme cycles — all payroll." },
+    { w: "kjp", t: "…Regina. Pull my name." },
+    { w: "rg", t: "Already did. There's a campaign folder with your initials on it — nine thousand posts calling you a dealer. The budget was approved two weeks BEFORE they planted anything. They wrote the verdict, then went shopping for evidence." },
+    { w: "kjp", t: "Discovery phase. I want every keystroke." },
+    { w: "rg", t: "You're in the sub-floor — the VENT takes you up, stay low in it. Hack the glass IT room and every camera on this floor goes blind. The floor chief carries the RED stairwell card." },
     { w: "kjp", t: "Let the record show: they never saw me." }
   ]
 },
@@ -235,15 +239,17 @@ const LEVELS = [null, // 1-indexed
              : !s.file ? "The cage is open. Take the file."
              : "Freight elevator, east — the yellow card officer walks the south corridor.",
   lore: [
-    "EXHIBIT I — folder 'MOON LANDING': receipts. It happened. TWICE. The second one's classified.",
-    "EXHIBIT J — Roswell invoice: 'weather balloon' + $2.1B shipping & handling.",
-    "EXHIBIT K — every document 'lost' to a subpoena since 1963, alphabetized."
+    "EXHIBIT I — flight manifests, 1984-91: OUT with crates marked FARM EQUIPMENT. BACK with cargo listed only by WEIGHT.",
+    "EXHIBIT J — a ledger in three columns: CITY · KILOS · STREET PRICE. Someone kept score.",
+    "EXHIBIT K — every document 'lost' to a subpoena since 1963, alphabetized. Nothing was ever destroyed."
   ],
   brief: [
-    { w: "op", t: "Records. CONSPIRACY THREE: nothing was ever destroyed. Every 'lost' file from every hearing lives on these shelves — paper never dies, it just gets a guard dog. Two K9s on the aisles; they smell THROUGH shelves." },
-    { w: "kjp", t: "Dogs. Why is it always dogs. …Exhibits go in the briefcase tonight." },
-    { w: "op", t: "Two terminals open the records cage. Your file is supposed to be inside." },
-    { w: "kjp", t: "Then court is in session." }
+    { w: "rg", t: "Records. CONSPIRACY THREE, counselor, and it's the ugly one: nothing was ever destroyed. Every file 'lost' to every hearing is on these shelves — including the flight manifests." },
+    { w: "kjp", t: "Manifests for what?" },
+    { w: "rg", t: "Planes leaving loaded with 'farm equipment' and coming home logged by WEIGHT only. Then a ledger — cities, kilos, street price. They ran product into American neighbourhoods and booked it as OPERATING REVENUE. Somebody's grandmother paid for those planes twice." },
+    { w: "kjp", t: "…That money never touched a bank. It couldn't. So where did a decade of untraceable cash GO?" },
+    { w: "rg", t: "That's the question that gets people drowned in lakes. Two terminals open the cage. Take the file and let's find out." },
+    { w: "kjp", t: "Court is in session." }
   ]
 },
 /* ============ 5 · THE VAULT — SCIF, lasers, the real file ============ */
@@ -295,19 +301,21 @@ const LEVELS = [null, // 1-indexed
     { x: 5, y: 4, dir: 0.4, arc: 0.7, sweep: 1.0 },
     { x: 40, y: 4, dir: 2.7, arc: 0.7, sweep: 1.0 }
   ],
-  hacksNeed: 1, fileNeed: true, fileLabel: "THE BLACK FILE + COLD KEYS", fileHold: 3, spawnPts: [[6,20],[30,20],[43,20]],
-  objText: s => s.hacks < 1 ? "The archives file was a DECOY. The real one is HERE. Hack VAULT CONTROL, east wall."
-             : !s.file ? "Vault is open. TAKE THE BLACK FILE — and the WALLET KEYS taped inside it."
-             : "One million coins in your briefcase. Sub-basement door — GO.",
+  hacksNeed: 1, fileNeed: true, fileLabel: "THE WALLET + THE EVIDENCE BAG", fileHold: 3, spawnPts: [[6,20],[30,20],[43,20]],
+  objText: s => s.hacks < 1 ? "Everything is in the SCIF: the coins AND the bag with your name on it. Hack VAULT CONTROL, east wall."
+             : !s.file ? "Vault is open. TAKE THE WALLET AND THE EVIDENCE BAG."
+             : "A million coins and the kilos that framed you. Sub-basement door — GO.",
   lore: [
-    "EXHIBIT L — cold-wallet printout: 1,000,000 BTC. Genesis-era. Custodian tag: 'R.G.'",
-    "EXHIBIT M — death certificate: GYATT, REGINA. 2011. Witnessed and SIGNED by… Regina Gyatt.",
+    "EXHIBIT L — cold-wallet printout: 1,000,000 BTC. Genesis-era. Every deposit dated to a shipment.",
+    "EXHIBIT M — evidence bag 88-A: two kilos. Custody tag: PIERRE, K.J. Signed OUT of this vault the night before your arrest, and back IN the morning after.",
     "EXHIBIT N — sticky note on the vault door: 'NEVER let Legal see this.' Too late."
   ],
   brief: [
-    { w: "op", t: "The decoy bothered me, so I pulled the SCIF manifest. Counselor… CONSPIRACY FOUR is the budget. There's a genesis-era cold wallet under this building. A MILLION coins. The custodian tag reads R.GYATT." },
-    { w: "kjp", t: "Regina Gyatt. The Agency's first quant. They said she drowned in 2011." },
-    { w: "op", t: "Then she filed her own death certificate very neatly. Your BLACK FILE sits in the same vault — with the wallet keys taped inside the cover. Lasers sweep the floor. They don't blink twice." },
+    { w: "rg", t: "This is the room, Kenny. CONSPIRACY FOUR is the whole reason for the other three: they turned a decade of street money into a genesis-era cold wallet. A million coins. Every deposit dated to a shipment." },
+    { w: "kjp", t: "And the bag?" },
+    { w: "rg", t: "Same vault. Evidence 88-A, two kilos, custody tag with your name — signed OUT the night before your arrest and back IN the morning after. That tag is the confession. The coins are just the motive." },
+    { w: "kjp", t: "They kept the receipt for framing me. In the same room as the money." },
+    { w: "rg", t: "Bureaucrats file everything, counselor — it's the only honest thing about them. Lasers sweep that floor and they don't blink twice." },
     { w: "kjp", t: "Neither do I. Tonight the estate settles." }
   ]
 },
@@ -357,15 +365,15 @@ const LEVELS = [null, // 1-indexed
   spawnPts: [[44,10],[40,21],[40,1]],
   objText: s => !s.holdDone ? "REGINA is flying your ride. Reach the HELIPAD (north-west) and HOLD until she flares." : "BOARD REGINA'S CHOPPER.",
   lore: [
-    "EXHIBIT O — the Director's calendar, every Friday: 'ask R.G. for budget.' She OWNS this building.",
-    "EXHIBIT P — helipad manifest, tonight, pilot: R. GYATT. Filed three weeks ago. She KNEW.",
+    "EXHIBIT O — the Director's calendar, every Friday: 'ask R.G. for budget.' She was never a quant. She was the BANK.",
+    "EXHIBIT P — helipad manifest, tonight, pilot: R. GYATT. Filed three weeks ago. She knew you would make it.",
     "EXHIBIT Q — an undated resignation letter, pre-signed: THE DIRECTOR."
   ],
   brief: [
-    { w: "dir", t: "…he is IN the building. He HAS the wallet. All units: weapons free. This stopped being a security problem. It is now a funeral." },
-    { w: "rg", t: "Kenny John Pierre. Regina Gyatt — yes, THE dead one. I've watched you climb my building all night, counselor. Magnificent billing." },
-    { w: "kjp", t: "You're supposed to be at the bottom of a lake." },
-    { w: "rg", t: "I'm at the top of the sky. The coins ride in your briefcase, I fly the chopper, and the Director learns who ACTUALLY owns Langley. ROOF. NOW. Hold the pad till I flare." },
+    { w: "dir", t: "…he is IN the building. He HAS the wallet AND the bag. All units: weapons free. This stopped being a security problem. It is now a funeral." },
+    { w: "rg", t: "That's the Director on every channel — which means he finally read the custody tag. Roof, Kenny. I filed tonight's flight plan three weeks ago. I've been waiting on you." },
+    { w: "kjp", t: "You knew I would get this far." },
+    { w: "rg", t: "I knew they'd frame the one man who actually reads the paperwork. Hold the pad until I flare, counselor — you're carrying the evidence AND the money, and I'm carrying you." },
     { w: "kjp", t: "See you in the courtroom — and the cockpit." }
   ]
 },
@@ -380,9 +388,10 @@ const CAST = {
 };
 
 const OUTRO = [
-  { w: "rg", t: "Wheels up. One million coins, one officially-dead pilot, one lawyer holding the ledger. The Agency's whole shadow treasury just flew out the front door." },
-  { w: "kjp", t: "Not flew. BILLED. Every conspiracy on every floor — logged as exhibits. They'll receive the invoice as a subpoena." },
-  { w: "op", t: "…and me without a resignation letter." },
-  { w: "rg", t: "Use the Director's. It's pre-signed — exhibit Q. Court is in session, gentlemen." },
+  { w: "rg", t: "Wheels up. A million coins, and one evidence bag with a custody tag that puts the Director's signature next to your arrest date." },
+  { w: "kjp", t: "The bag first. The money is restitution — the TAG is the case. They signed the kilos out of their own vault to plant on me, and then they filed it." },
+  { w: "op", t: "Switchboard here — for what it's worth, counselor, I typed some of those posts. I'd like to testify." },
+  { w: "kjp", t: "You'll get a subpoena and a very good seat. Regina — every floor of that building was a different lie, and every one of them was paid for with the same money." },
+  { w: "rg", t: "Then bill them for all four. Court is in session, gentlemen." },
   { w: "kjp", t: "See you in the courtroom." }
 ];

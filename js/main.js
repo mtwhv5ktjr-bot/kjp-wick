@@ -10,7 +10,7 @@ function startLevel(n){
   prerenderLevel();
   sandboxInit();                                   // after prerender: LIGHTS must exist
   rainDrops = null;
-  introT = 2.6;
+  introT = 1.5;                                    // the name card, not an intermission
   LV.stats.spotted = 0;
   focusT = 1;
   STATE = "game";
@@ -37,7 +37,10 @@ function gameUpdate(dt){
     LV.over = null;
     return;
   }
-  if (PRESS.has("Escape")){ STATE = "pause"; SFX.ui2(); return; }
+  /* ESC, or the on-screen button — a phone has no ESC key */
+  const B = PAUSE_BTN;
+  const hitPause = MOUSE.pressed && MOUSE.x >= B.x && MOUSE.x <= B.x + B.w && MOUSE.y >= B.y && MOUSE.y <= B.y + B.h;
+  if (PRESS.has("Escape") || hitPause){ STATE = "pause"; SFX.ui2(); return; }
   if (BOT) botUpdate(dt);
   /* FOCUS slows the SIMULATION, never the input read — planning stays crisp */
   const scale = focusScale(dt);
@@ -47,7 +50,8 @@ function gameUpdate(dt){
 function drawIntroCard(){
   if (introT <= 0) return;
   introT -= 1 / 60;
-  const a = clamp(introT > 2 ? (2.6 - introT) / 0.6 : introT / 0.8, 0, 1);
+  if (MOUSE.pressed || PRESS.size) introT = Math.min(introT, 0.25);   // any input dismisses it
+  const a = clamp(introT > 1.1 ? (1.5 - introT) / 0.4 : introT / 0.6, 0, 1);
   g.fillStyle = `rgba(3,6,10,${a * 0.75})`; g.fillRect(0, 0, W, H);
   g.globalAlpha = a;
   g.font = "900 15px Arial Black"; g.textAlign = "center";
@@ -76,6 +80,7 @@ function frame(now, syncOnly){
   else if (STATE === "intel") drawIntel();
   else if (STATE === "options") drawOptions();
   else if (STATE === "dossier") drawDossier();
+  else if (STATE === "case") drawCase();
   else if (STATE === "brief") drawBrief(dt);
   else if (STATE === "debrief") drawDebrief(dt);
   else if (STATE === "dead") drawDead();

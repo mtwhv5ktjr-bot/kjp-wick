@@ -1389,12 +1389,26 @@ function drawHUD(){
     g.fillText("⌖ PAD HOLD " + Math.ceil((LV.def.holdTime || 30) - LV.holdT) + "s", W / 2, 70);
     g.textAlign = "left";
   }
+  drawPauseButton();
   drawRadar();
   drawSandboxHUD();
   drawFocusMeter();
   drawDamageArrow();
   drawTutorial();
   if (IS_TOUCH) drawTouchUI();
+}
+/* PAUSE — ESC is fine on a keyboard and does not exist on a phone. This is the
+   always-available way out, and main.js hit-tests the same rect. */
+const PAUSE_BTN = { x: W - 52, y: 16, w: 36, h: 36 };
+function drawPauseButton(){
+  const B = PAUSE_BTN;
+  const hot = MOUSE.x >= B.x && MOUSE.x <= B.x + B.w && MOUSE.y >= B.y && MOUSE.y <= B.y + B.h;
+  g.fillStyle = hot ? "rgba(28,74,48,0.95)" : "rgba(6,11,16,0.7)";
+  g.fillRect(B.x, B.y, B.w, B.h);
+  g.strokeStyle = hot ? "#7cf9a5" : "rgba(124,249,165,0.4)"; g.lineWidth = 1.5;
+  g.strokeRect(B.x + 0.5, B.y + 0.5, B.w - 1, B.h - 1);
+  g.fillStyle = hot ? "#dfffe9" : "#9fd7b0";
+  g.fillRect(B.x + 12, B.y + 10, 4, 16); g.fillRect(B.x + 20, B.y + 10, 4, 16);
 }
 /* WHERE did that come from — a rim arc at the edge of the screen, decaying.
    Without it, top-down combat is just being hurt by the room. */

@@ -190,16 +190,17 @@ function drawTitle(){
   g.fillText("THE BLACK FILE", 74, 314);
   g.font = "700 13px Verdana"; g.fillStyle = "#7c8ba3";
   g.fillText("attorney at law. deniable asset. EXCOMMUNICADO.", 74, 340);
-  g.fillText("Break into Langley. Go DEEPER. Unveil the conspiracy on every floor —", 74, 358);
+  g.fillText("They planted two kilos in his car and took his licence for it.", 74, 358);
   g.fillStyle = "#ffd27c";
-  g.fillText("all the way down to the BITCOINS… and REGINA GYATT.", 74, 376);
+  g.fillText("Break into Langley for REGINA GYATT — recover the lost BITCOIN", 74, 376);
+  g.fillText("and the evidence bag they framed him with.", 74, 392);
   /* film bars */
   g.fillStyle = "rgba(0,0,0,0.55)"; g.fillRect(0, 0, W, 26); g.fillRect(0, H - 26, W, 26);
   g.font = "700 10px monospace"; g.fillStyle = "#3d5a48";
   g.fillText("CLASSIFIED // KJP-ORIGIN // EYES ONLY", 20, 17);
   g.textAlign = "right"; g.fillText("kjp-game.wick.pics", W - 20, 17); g.textAlign = "left";
   /* menu */
-  const bx = 74, by = 392, bw = 300, bh = 42, gap = 9;
+  const bx = 74, by = 408, bw = 300, bh = 40, gap = 8;
   btn(bx, by, bw, bh, "▶ INFILTRATE", () => { STATE = "select"; });
   btn(bx, by + (bh + gap), bw / 2 - 5, bh, "🎭 SKINS", () => { STATE = "skins"; }, { fs: 13 });
   btn(bx + bw / 2 + 5, by + (bh + gap), bw / 2 - 5, bh, "🔫 ARSENAL", () => { STATE = "arsenal"; }, { fs: 13 });
@@ -350,7 +351,9 @@ function drawBrief(dt){
   /* text window */
   g.fillStyle = "rgba(8,16,12,0.9)"; g.fillRect(120, 500, W - 240, 130);
   g.strokeStyle = "rgba(124,249,165,0.3)"; g.strokeRect(120.5, 500.5, W - 240, 130);
-  BR.chars += dt * 60;
+  /* Typewriter at a readable-but-brisk clip. It used to run at 60 c/s, which
+     made a five-line briefing a twelve-second wall before the game started. */
+  BR.chars += dt * 130;
   const txt = ln.t.slice(0, BR.chars | 0);
   if ((BR.chars | 0) < ln.t.length && (BR.chars | 0) % 3 === 0) SFX.type();
   g.font = "700 15px Verdana"; g.fillStyle = CAST[who].col;
@@ -360,7 +363,12 @@ function drawBrief(dt){
     if (Math.sin(performance.now() / 300) > 0){ g.fillStyle = "#7cf9a5"; g.font = "900 14px Arial Black"; g.fillText("▼", W - 160, 618); }
   }
   g.font = "700 11px Verdana"; g.fillStyle = "#57717f";
-  g.fillText("click / ENTER — next · ESC — skip", 120, 652);
+  g.fillText("click anywhere / ENTER — next · ESC — straight into the op", 120, 660);
+  /* line counter: how much briefing is left, so it never feels open-ended */
+  for (let i = 0; i < BR.lines.length; i++){
+    g.fillStyle = i < BR.i ? "#2f7a4d" : i === BR.i ? "#7cf9a5" : "rgba(120,140,160,0.25)";
+    g.fillRect(120 + i * 14, 668, 10, 3);
+  }
   if (!BR.outro){
     g.font = "900 22px Arial Black"; g.fillStyle = "#e6f1ff";
     g.fillText("OP " + BR.n + " — " + LEVELS[BR.n].name, 120, 200);
@@ -372,14 +380,22 @@ function drawBrief(dt){
   const advance = () => {
     if ((BR.chars | 0) < ln.t.length){ BR.chars = ln.t.length; return; }
     BR.i++; BR.chars = 0; SFX.codec();
-    if (BR.i >= BR.lines.length){
-      if (BR.outro){ STATE = "credits"; CRED = { t: 0 }; }
-      else startLevel(BR.n);
-    }
+    if (BR.i >= BR.lines.length) skipAll();
   };
-  if (MOUSE.pressed) advance();
+  const skipAll = () => {
+    if (BR.outro){ STATE = "credits"; CRED = { t: 0 }; }
+    else startLevel(BR.n);
+  };
+  /* A VISIBLE way out. ESC works, but touch has no ESC and nobody reads the
+     hint line on a briefing they have already seen four times. */
+  const nextHot = btn(W - 340, 648, 100, 34, "NEXT ▸", advance, { fs: 12 });
+  const skipHot = btn(W - 228, 648, 148, 34, BR.outro ? "SKIP ▸" : "SKIP BRIEFING ▸", skipAll, { fs: 11 });
+  dispatchClicks();
+  /* clicking anywhere ELSE still advances — but a click on a button must not
+     do both, or SKIP would also eat the first line of the next screen */
+  if (MOUSE.pressed && !nextHot && !skipHot) advance();
   if (PRESS.has("Enter") || PRESS.has("Space")) advance();
-  if (PRESS.has("Escape")){ if (BR.outro){ STATE = "credits"; CRED = { t: 0 }; } else startLevel(BR.n); }
+  if (PRESS.has("Escape")) skipAll();
 }
 function portBox(x, y, active){
   g.strokeStyle = active ? "#7cf9a5" : "#233"; g.lineWidth = active ? 3 : 2;
@@ -835,6 +851,47 @@ function drawDossier(){
     }
   }
   btn(W - 190, H - 62, 120, 40, "← BACK", () => { STATE = "title"; });
+  btn(W - 340, H - 62, 140, 40, "📁 THE CASE", () => { STATE = "case"; }, { fs: 12 });
+  dispatchClicks();
+}
+
+/* ---------- THE CASE FILE — the story, out from behind the skip button ----
+   Briefings are skippable (they should be), so the plot cannot only live
+   there. Every exhibit you pick up lands on this board permanently. */
+function drawCase(){
+  UIB = [];
+  g.fillStyle = "#05070c"; g.fillRect(0, 0, W, H);
+  g.font = "900 30px Arial Black"; g.fillStyle = "#e6f1ff"; g.fillText("THE CASE", 70, 66);
+  g.font = "700 11px Verdana"; g.fillStyle = "#7c8ba3";
+  g.fillText("PIERRE, KENNY JOHN — v. THE AGENCY.  Client: R. GYATT.  Exhibits recovered in the field are filed here permanently.", 70, 86);
+  /* the charge sheet */
+  g.fillStyle = "rgba(48,20,20,0.5)"; g.fillRect(70, 100, W - 140, 62);
+  g.strokeStyle = "#7a3030"; g.lineWidth = 1.5; g.strokeRect(70.5, 100.5, W - 141, 61);
+  g.font = "900 12px Arial Black"; g.fillStyle = "#ff8f8f"; g.fillText("THE FRAME", 84, 122);
+  g.font = "700 11px Verdana";
+  wrapText2("Two kilos signed OUT of the Agency's own evidence vault the night before the arrest, planted, and signed back IN the morning after. Nine thousand paid posts called him a dealer — budget approved two weeks BEFORE anything was planted. Recover the bag AND the wallet: the money is the motive, the custody tag is the confession.",
+    84, 140, W - 200, 14, "#d9b0b0", "700 11px Verdana");
+  /* exhibits, per op */
+  let y = 186;
+  for (let n = 1; n <= 6; n++){
+    const L = LEVELS[n], best = PROG.lv[n];
+    const got = best ? (best.intel || 0) : 0;
+    g.font = "900 12px Arial Black"; g.fillStyle = best ? "#7cf9a5" : "#3d4854";
+    g.fillText("OP " + n + " · " + L.name, 70, y);
+    g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
+    g.fillText(got + "/" + (L.lore || []).length + " exhibits", 260, y);
+    (L.lore || []).forEach((txt, i) => {
+      const have = i < got;
+      g.font = "700 10px Verdana";
+      g.fillStyle = have ? "#cfe3d2" : "#2f3a44";
+      const line = have ? txt : "████████  — not yet recovered";
+      g.fillText((have ? "✓ " : "· ") + line.slice(0, 118), 90, y + 16 + i * 15);
+    });
+    y += 20 + Math.max(1, (L.lore || []).length) * 15;
+  }
+  g.font = "700 10px Verdana"; g.fillStyle = "#8fc7ff";
+  g.fillText("Exhibits are the 'i' pickups in the field. Collect all of an op's exhibits for the ARCHIVIST ribbon.", 70, H - 78);
+  btn(W - 190, H - 62, 120, 40, "← BACK", () => { STATE = "dossier"; });
   dispatchClicks();
 }
 
