@@ -3,3 +3,5 @@ shots*.png
 .vercel/
 node_modules/
 .claude/
+lb-data/
+lb-server.log

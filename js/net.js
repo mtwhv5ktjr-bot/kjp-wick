@@ -4,7 +4,12 @@
 "use strict";
 
 const NFT_VERIFY_URL = "https://wick-arsenal.vercel.app/api/verify";
-const LB_URL = "https://wick-arsenal.vercel.app/api/leaderboard";
+/* LEADERBOARD HOST — one constant, so the board can move without touching
+   anything else. `?lb=<origin>` overrides it for testing against a local
+   tools/lb-server.mjs without editing or redeploying the build. */
+const LB_HOST = (/[?&]lb=([^&]+)/.exec(location.search) || [])[1];
+const LB_URL = LB_HOST ? decodeURIComponent(LB_HOST).replace(/\/$/, "") + "/api/leaderboard"
+                       : "https://wick-arsenal.vercel.app/api/leaderboard";
 const GUNS_ADDR = "0x188848DdB42fA8Ca2EB05649c944e05dfA2158FD";   // WickGuns — LIVE on PulseChain
 const MODS_ADDR = "0x004E6610ff47c6A6510DA446257822B37D26CD73";   // WickMods attachments
 /* KJP GEAR — the 100-piece cross-game mint. Paste the address after
@@ -223,14 +228,23 @@ function setPlayerName(){
 }
 
 /* leaderboard: GET is throttled; POST signs the house message format */
+let lbNote = "";       // why the board is empty — never leave the player guessing
 function lbFetch(){
   if (lbBusy || (lbTop && performance.now() - lbAt < 120000)) return;
   lbBusy = true;
   fetchT(LB_URL + "?mode=kjp").then(r => r.json()).then(j => {
-    if (j && j.ok){ lbTop = j.top || []; lbDown = !!j.degraded; }
-    else lbDown = true;
+    if (j && j.ok){
+      lbTop = j.top || [];
+      /* A DEGRADED board and an empty board look identical to a player, and
+         that is exactly how a suspended store ate a tournament unnoticed.
+         Say which one it is, out loud, on the front page. */
+      lbDown = !!j.degraded;
+      lbNote = j.degraded ? "BOARD OFFLINE — existing scores are safe"
+             : j.self_hosted ? "self-hosted board" : "";
+    } else { lbDown = true; lbNote = "board unreachable"; }
     lbAt = performance.now();
-  }).catch(() => { lbDown = true; lbAt = performance.now(); }).finally(() => { lbBusy = false; });
+  }).catch(() => { lbDown = true; lbNote = "board unreachable"; lbAt = performance.now(); })
+    .finally(() => { lbBusy = false; });
 }
 async function submitScore(){
   if (!walletAddr){ lbMsg = "connect first"; return; }

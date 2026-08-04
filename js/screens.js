@@ -232,13 +232,25 @@ function drawTitleBoard(){
   g.fillText("GLOBAL OPERATIVES", x + 12, y + 22);
   g.font = "700 11px Verdana";
   if (!lbTop){ g.fillStyle = "#7c8ba3"; g.fillText(lbDown ? "board offline" : "…dialing", x + 12, y + 44); lbFetch(); }
-  else if (!lbTop.length){ g.fillStyle = "#7c8ba3"; g.fillText("no scores yet — be first", x + 12, y + 44); }
+  else if (!lbTop.length){
+    /* the distinction that matters: nobody has played, vs the board is DOWN */
+    if (lbDown){
+      g.fillStyle = "#ff8f8f"; g.font = "900 11px Arial Black";
+      g.fillText("⚠ BOARD OFFLINE", x + 12, y + 44);
+      g.font = "700 10px Verdana"; g.fillStyle = "#9db4cc";
+      wrapText2("Existing scores are SAFE — the store is unreachable, not empty.", x + 12, y + 60, w2 - 24, 12, "#9db4cc", "700 10px Verdana");
+    } else { g.fillStyle = "#7c8ba3"; g.fillText("no scores yet — be first", x + 12, y + 44); }
+  }
   else lbTop.slice(0, 7).forEach((e2, i) => {
     g.fillStyle = i === 0 ? "#ffd27c" : "#9db4cc";
     const nm = (e2.name && e2.name.trim()) ? e2.name : (e2.a || "").slice(0, 6) + "…" + (e2.a || "").slice(-4);
     g.fillText((i + 1) + ". " + nm, x + 12, y + 44 + i * 18);
     g.textAlign = "right"; g.fillText(e2.score.toLocaleString(), x + w2 - 10, y + 44 + i * 18); g.textAlign = "left";
   });
+  if (lbNote){
+    g.font = "700 9px Verdana"; g.fillStyle = lbDown ? "#ff8f8f" : "#4a6a58";
+    g.fillText(lbNote, x + 12, y + 162);
+  }
 }
 
 /* ---------- mission select ---------- */
