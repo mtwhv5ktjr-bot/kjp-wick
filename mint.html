@@ -46,6 +46,22 @@
   #msg.bad{color:#ff8f8f}#msg.good{color:#7cf9a5}
   footer{margin-top:40px;padding-top:18px;border-top:1px solid #1c2630;color:#57717f;font-size:12px}
   .warn{border-color:#5a3a1a;background:rgba(255,157,91,.06);color:#ffc59d}
+  /* getting back to the game should never require the browser's back button */
+  /* 48px minimum at EVERY width — a landscape phone is 844px wide and would
+     miss a max-width:760px rule entirely, while still being a thumb */
+  .backbtn{display:inline-flex;align-items:center;min-height:48px;margin-bottom:16px;
+    padding:0 18px;border:1px solid #2f7a4d;
+    border-radius:8px;background:#12261b;color:#baf7cf;text-decoration:none;
+    font:900 12px Arial Black;letter-spacing:.5px}
+  .backbtn:hover{background:#1a3a26}
+  /* the same link row on every page, so you are never stranded */
+  .nav{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 6px}
+  .nav a{flex:1 1 auto;display:flex;align-items:center;justify-content:center;
+    min-height:48px;text-align:center;min-width:120px;padding:0 12px;border-radius:8px;
+    border:1px solid #24303c;background:#0a0f15;color:#9fd7b0;text-decoration:none;
+    font:900 11px Arial Black;letter-spacing:.4px}
+  .nav a:hover{border-color:#2f7a4d;background:#12261b;color:#dfffe9}
+  .nav a.on{border-color:#8a6d2f;background:#3a2f10;color:#ffd27c}
 
   /* ---------- PHONES ----------
      Most of this mint will happen inside a wallet browser on a 390px screen.
@@ -65,6 +81,10 @@
     .stat{font-size:26px}
     input[type=number]{flex:0 0 84px;height:52px;font-size:19px}
     button{flex:1 1 0;min-height:52px;padding:14px 12px;font-size:14px}
+    /* the nav/back links are anchors, not <button>, so the rule above missed
+       them — they were 39-41px, under the 44px touch minimum */
+    .nav a,.backbtn{min-height:48px;display:flex;align-items:center;justify-content:center}
+    .nav{gap:10px}
     .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
     .card{padding:10px}
     .card h3{font-size:12px}
@@ -81,6 +101,8 @@
   }
 </style>
 </head><body><div class="wrap">
+
+<a class="backbtn" href="https://kjp-game.wick.pics">← BACK TO THE GAME</a>
 
 <header>
   <h1>KJP GEAR</h1>
@@ -119,9 +141,14 @@
 <div class="grid" id="grid"></div>
 
 <footer>
+  <div class="nav">
+    <a href="https://kjp-game.wick.pics">▶ PLAY KJP</a>
+    <a href="https://games.wick.pics">🕹 ARCADE</a>
+    <a href="https://games.wick.pics/play/">🐸 PEPE WICK</a>
+    <a href="https://mint.wick.pics">🔫 GUNS + MODS</a>
+    <a class="on" href="/mint">🎒 KJP GEAR</a>
+  </div>
   Contract: <span id="addr" class="muted">not deployed yet</span><br>
-  Games: <a href="https://kjp-game.wick.pics">kjp-game.wick.pics</a> · <a href="https://games.wick.pics">games.wick.pics</a> ·
-  Guns: <a href="https://mint.wick.pics">mint.wick.pics</a><br>
   See you in the courtroom.
 </footer>
 </div>

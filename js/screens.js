@@ -220,7 +220,7 @@ function drawTitle(){
   /* board */
   drawTitleBoard();
   g.font = "700 11px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
-  g.fillText("$WICK universe · games.wick.pics · mint.wick.pics · retainer 0x3848…39ED · see you in the courtroom", W / 2, H - 14);
+  drawSiteLinks();
   g.textAlign = "left";
   dispatchClicks();
 }
@@ -251,6 +251,43 @@ function drawTitleBoard(){
     g.font = "700 9px Verdana"; g.fillStyle = lbDown ? "#ff8f8f" : "#4a6a58";
     g.fillText(lbNote, x + 12, y + 162);
   }
+}
+
+/* ---------- the site link bar ----------
+   These used to be a single dead line of text naming other sites you had no
+   way to reach. Same row, now real hit targets, on every menu screen. */
+const SITE_LINKS = [
+  { label: "🎒 GEAR MINT", url: "/mint" },
+  { label: "🔫 GUNS + MODS", url: "https://mint.wick.pics" },
+  { label: "🕹 ARCADE", url: "https://games.wick.pics" },
+  { label: "🐸 PEPE WICK", url: "https://games.wick.pics/play/" }
+];
+function drawSiteLinks(){
+  const h2 = 22, y = H - h2 - 8;
+  let x = 70;
+  g.font = "900 10px Arial Black";
+  for (const L of SITE_LINKS){
+    /* measureText under-reports emoji in Arial Black, so the label spills out
+       of its own chip — pay for the glyph explicitly */
+    const emoji = /[^\x00-\x7F]/.test(L.label) ? 14 : 0;
+    const w2 = g.measureText(L.label).width + 26 + emoji;
+    const hot = MOUSE.x >= x && MOUSE.x <= x + w2 && MOUSE.y >= y && MOUSE.y <= y + h2;
+    g.fillStyle = hot ? "rgba(28,74,48,0.95)" : "rgba(12,20,26,0.9)";
+    g.fillRect(x, y, w2, h2);
+    /* bright enough to read as separate buttons — at #243040 the four chips
+       merged into one continuous strip */
+    g.strokeStyle = hot ? "#7cf9a5" : "#33506a"; g.lineWidth = 1.5;
+    g.strokeRect(x + 0.75, y + 0.75, w2 - 1.5, h2 - 1.5);
+    g.fillStyle = hot ? "#dfffe9" : "#6d8494";
+    g.fillText(L.label, x + 13, y + 15);
+    UIB.push({ x, y, w: w2, h: h2, cb: () => openShop(L.url) });
+    x += w2 + 8;
+  }
+  /* right-aligned, not trailing the chips: emoji under-report in measureText,
+     so a label can overflow its own chip and collide with whatever follows */
+  g.font = "700 9px Verdana"; g.fillStyle = "#3d4854"; g.textAlign = "right";
+  g.fillText("$WICK universe · see you in the courtroom", W - 70, y + 15);
+  g.textAlign = "left";
 }
 
 /* ---------- mission select ---------- */
@@ -307,6 +344,7 @@ function drawSelect(){
   if (walletAddr) btn(300, H - 88, 240, 34, "📡 SUBMIT TO BOARD", () => submitScore(), { fs: 12 });
   else { g.font = "700 11px Verdana"; g.fillStyle = "#57717f"; g.fillText("connect in ARSENAL to submit scores (holders only)", 300, H - 68); }
   btn(W - 190, H - 88, 120, 40, "← BACK", () => { STATE = "title"; });
+  drawSiteLinks();
   dispatchClicks();
 }
 function fmtTime(t){ const m = t / 60 | 0, s = t % 60 | 0; return m + ":" + String(s).padStart(2, "0"); }
@@ -622,6 +660,7 @@ function drawSkins(){
     else if (un) UIB.push({ x, y, w: cw, h: ch, cb: () => { PROG.skin = id; saveProg(); SFX.unlock(); } });
   });
   btn(W - 190, H - 78, 120, 40, "← BACK", () => { STATE = "title"; });
+  drawSiteLinks();
   dispatchClicks();
 }
 
@@ -743,6 +782,7 @@ function drawArsenal(){
     g.fillText(d.rare + " · " + d.pool, x + 8, yy + ch2 - 6);
   }
   btn(W - 190, H - 78, 120, 40, "← BACK", () => { STATE = "title"; });
+  drawSiteLinks();
   dispatchClicks();
 }
 function gunRow(id, y, clickable, cb, inCarry){
@@ -836,6 +876,7 @@ function drawIntel(){
   g.fillText("KJP — a $WICK universe game on kjp-game.wick.pics · sister ops: games.wick.pics (PEPE WICK) · mint.wick.pics (WICK ARSENAL NFTs)", L, y);
   g.fillText("counsel's retainer: 0x3848D41D6f439Ca645e9193c7680629A86B739ED", L, y + 16);
   btn(W - 190, H - 78, 120, 40, "← BACK", () => { STATE = "title"; });
+  drawSiteLinks();
   dispatchClicks();
 }
 
@@ -917,6 +958,7 @@ function drawDossier(){
   }
   btn(W - 190, H - 62, 120, 40, "← BACK", () => { STATE = "title"; });
   btn(W - 340, H - 62, 140, 40, "📁 THE CASE", () => { STATE = "case"; }, { fs: 12 });
+  drawSiteLinks();
   dispatchClicks();
 }
 
