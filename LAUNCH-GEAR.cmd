@@ -22,16 +22,51 @@ echo   written to disk and never echoed to the screen.
 echo  ============================================================
 echo.
 echo    [1]  DEPLOY          (mint starts CLOSED - safe)
-echo    [2]  OPEN THE MINT   (after you have pasted the address in)
-echo    [3]  dry run only    (prints the plan, sends nothing)
-echo    [4]  quit
+echo    [2]  OPEN THE MINT   (makes it public)
+echo    [3]  MINT SOME       (buy pieces yourself - real PLS)
+echo    [4]  VERIFY          (check a deployed address against this build)
+echo    [5]  dry run only    (prints the plan, sends nothing)
+echo    [6]  quit
 echo.
 set "CH="
-set /p CH="Choose 1-4: "
-if "%CH%"=="3" goto dry
+set /p CH="Choose 1-6: "
+if "%CH%"=="5" goto dry
 if "%CH%"=="1" goto deploy
 if "%CH%"=="2" goto openmint
+if "%CH%"=="3" goto mintsome
+if "%CH%"=="4" goto verify
 goto :eof
+
+:verify
+echo.
+set "ADDR="
+set /p ADDR="Contract address to verify (0x...): "
+if "%ADDR%"=="" ( echo No address. & pause & goto menu )
+%NODE% tools\verify-gear.mjs %ADDR%
+pause
+goto menu
+
+:mintsome
+echo.
+set "ADDR="
+set /p ADDR="Contract address (0x...): "
+if "%ADDR%"=="" ( echo No address. & pause & goto menu )
+set "QTY="
+set /p QTY="How many to mint (1-5): "
+if "%QTY%"=="" set QTY=1
+echo.
+echo  This SPENDS REAL PLS: 1,000,000 per piece.
+echo  Half of it buys and burns KJP, half buys and burns WICK.
+set "GO="
+set /p GO="Type MINT to confirm: "
+if /I not "%GO%"=="MINT" ( echo Aborted. & pause & goto menu )
+call :getkey
+if not defined PK ( echo No key entered. & pause & goto menu )
+%NODE% tools\mint-gear.mjs %ADDR% %QTY%
+set "PK="
+echo.
+pause
+goto menu
 
 :dry
 echo.

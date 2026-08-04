@@ -130,7 +130,7 @@
 /* KJP GEAR mint — no bundler, no framework. Reads the contract for supply and
    price, mints through the injected wallet. When GEAR_ADDR is still zero the
    page says so honestly instead of pretending to be live. */
-const GEAR_ADDR = "0x0000000000000000000000000000000000000000";   // paste after tools/deploy-gear.mjs
+const GEAR_ADDR = "0x6BdED56bA6F0d8062e056062D47F41ac735d5d10";   // KJP GEAR — LIVE on PulseChain 2026-08-04
 const PULSE_RPC = "https://rpc.pulsechain.com";
 const CHAIN_ID  = 369;
 const LIVE = !/^0x0{40}$/.test(GEAR_ADDR);
@@ -194,7 +194,7 @@ document.getElementById("grid").innerHTML = GEAR.map((g, i) => `
     <div class="r">${g.r}</div>
     <p><b style="color:#7cf9a5">KJP</b> — ${g.kjp}</p>
     <p><b style="color:#8fc7ff">PEPE WICK</b> — ${g.pw}</p>
-    <div class="pool">${g.pool} of 100</div>
+    <div class="pool" id="pool${i}">${g.pool} of 100</div>
   </div>`).join("");
 
 const $ = id => document.getElementById(id);
@@ -220,11 +220,24 @@ async function refresh(){
   }
   $("addr").textContent = GEAR_ADDR;
   try{
+    /* selectors are keccak-derived, never guessed — a wrong one reverts the
+       read and the mint button can never enable (that exact bug shipped once) */
     const [sup, pr, open] = await Promise.all([
       call("0x18160ddd"),                       // totalSupply()
       call("0x6817c76c"),                       // mintPrice()
-      call("0x1b3ed722")                        // mintOpen()
+      call("0x24bbd049")                        // mintOpen()
     ]);
+    /* live stock per type — poolLeft(uint8) */
+    Promise.all(GEAR.map((_, i) =>
+      call("0xb6a2fccd" + (i + 1).toString(16).padStart(64, "0")).then(h => parseInt(h, 16)).catch(() => null)
+    )).then(left => {
+      left.forEach((n, i) => {
+        const el = document.getElementById("pool" + i);
+        if (!el || n === null || isNaN(n)) return;
+        el.textContent = n === 0 ? "SOLD OUT" : n + " of " + GEAR[i].pool + " left";
+        el.style.color = n === 0 ? "#ff8f8f" : "#ff9d5b";
+      });
+    });
     const supply = parseInt(sup, 16);
     priceWei = BigInt(pr);
     $("supply").textContent = supply + " / 100";

@@ -10,7 +10,7 @@ const MODS_ADDR = "0x004E6610ff47c6A6510DA446257822B37D26CD73";   // WickMods at
 /* KJP GEAR — the 100-piece cross-game mint. Paste the address after
    tools/deploy-gear.mjs; all-zero = "not deployed yet" and the game simply
    runs gearless. The same address goes in pepe-zero's GEAR_ADDR. */
-const GEAR_ADDR = "0x0000000000000000000000000000000000000000";
+const GEAR_ADDR = "0x6BdED56bA6F0d8062e056062D47F41ac735d5d10";   // KJP GEAR — LIVE on PulseChain 2026-08-04
 const PULSE_RPC = "https://rpc.pulsechain.com";
 /* Reown (WalletConnect) — public client identifier, safe to ship */
 const REOWN_ID = "02101ae7f77b3ea70f50919779025201";
