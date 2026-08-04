@@ -26,16 +26,58 @@ echo    [2]  OPEN THE MINT   (makes it public)
 echo    [3]  MINT SOME       (buy pieces yourself - real PLS)
 echo    [4]  VERIFY          (check a deployed address against this build)
 echo    [5]  dry run only    (prints the plan, sends nothing)
+echo    [7]  DEPLOY MARKET   (lets holders resell gear - 15%% burned)
 echo    [6]  quit
 echo.
 set "CH="
-set /p CH="Choose 1-6: "
+set /p CH="Choose 1-7: "
 if "%CH%"=="5" goto dry
 if "%CH%"=="1" goto deploy
 if "%CH%"=="2" goto openmint
 if "%CH%"=="3" goto mintsome
 if "%CH%"=="4" goto verify
+if "%CH%"=="7" goto market
 goto :eof
+
+:market
+echo.
+echo  ============================================================
+echo   DEPLOY THE GEAR MARKET
+echo  ============================================================
+echo   This is a SEPARATE contract from the mint. It is what lets
+echo   holders list gear for sale and make offers on it.
+echo.
+echo   Every sale burns 15%%: half buys and burns KJP, half WICK.
+echo   The market can never hold your money - sale proceeds go
+echo   straight to the seller in the same transaction.
+echo.
+echo   Sending gear wallet-to-wallet already works WITHOUT this.
+echo  ============================================================
+echo.
+set "ADDR=0x6BdED56bA6F0d8062e056062D47F41ac735d5d10"
+set "IN="
+set /p IN="Gear contract [Enter = %ADDR%]: "
+if not "%IN%"=="" set "ADDR=%IN%"
+echo.
+echo  Deploying the market against %ADDR%
+set "GO="
+set /p GO="Type MARKET to confirm: "
+if /I not "%GO%"=="MARKET" ( echo. & echo Aborted. Nothing was sent. & pause & goto menu )
+call :getkey
+if not defined PK ( echo No key entered. & pause & goto menu )
+echo.
+%NODE% tools\deploy-gear.mjs --market %ADDR%
+set "PK="
+echo.
+echo  ------------------------------------------------------------
+echo   The address is written into wick-arsenal\web\config.js for
+echo   you. Last step - publish the arsenal so the SELL and BUY
+echo   buttons appear for everyone:
+echo.
+echo       cd "..\wick-arsenal"  then  npx vercel deploy --prod --yes
+echo  ------------------------------------------------------------
+pause
+goto menu
 
 :verify
 echo.

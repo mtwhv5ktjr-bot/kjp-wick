@@ -7,7 +7,7 @@
 //   kjp-wick/js/net.js        GEAR_ADDR
 //   pepe-zero/index.html      GEAR_ADDR      (then pepe-wick/sync.cmd)
 // then open the mint with:  PK=0x… node tools/deploy-gear.mjs --open <addr>
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { createRequire } from "module";
@@ -65,7 +65,22 @@ if (mktIdx >= 0){
   const addr = await c.getAddress();
   console.log("\n✓ KJP GEAR MARKET live at " + addr);
   console.log("  15% royalty on every sale, burned 50/50 KJP + WICK");
-  console.log("  paste into wick-arsenal/web/config.js  gearMarket, then sync the arsenal port");
+  /* Wire it up automatically. Hand-pasting an address into config.js is the
+     step most likely to be fumbled or forgotten, and a wrong address there
+     points real buy transactions at nothing. Only rewrite the zero
+     placeholder — never clobber an address someone already put here. */
+  const cfgPath = join(root, "..", "wick-arsenal", "web", "config.js");
+  try {
+    const src = readFileSync(cfgPath, "utf8");
+    const m = /gearMarket:\s*"(0x[a-fA-F0-9]{40})"/.exec(src);
+    if (!m) console.log("  ! could not find gearMarket in config.js — paste " + addr + " by hand");
+    else if (!/^0x0{40}$/.test(m[1]) && m[1].toLowerCase() !== addr.toLowerCase())
+      console.log("  ! config.js already points at " + m[1] + " — left alone. Change it by hand if that is stale.");
+    else {
+      writeFileSync(cfgPath, src.replace(m[0], 'gearMarket: "' + addr + '"'));
+      console.log("  ✓ wrote it into wick-arsenal/web/config.js — now redeploy the arsenal");
+    }
+  } catch(e){ console.log("  ! config.js not patched (" + e.message + ") — paste " + addr + " by hand"); }
   process.exit(0);
 }
 
