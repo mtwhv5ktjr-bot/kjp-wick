@@ -1,0 +1,201 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KJP GEAR — FIELD ISSUE · 100 pieces</title>
+<meta name="description" content="100 pieces of cross-game field equipment for the WICK universe. Works in KJP and PEPE WICK. Every mint burns 75% KJP and 25% WICK, automatically.">
+<meta property="og:title" content="KJP GEAR — FIELD ISSUE">
+<meta property="og:description" content="Suppressors, kevlar, night optics, a skeleton key. 100 pieces, 1,000,000 PLS each. 75% burns KJP · 25% burns WICK — enforced by code.">
+<meta name="theme-color" content="#05070c">
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="10" fill="%2305070c"/><text x="32" y="43" font-family="Arial Black,Arial" font-weight="900" font-size="24" fill="%23ffd27c" text-anchor="middle">KJP</text></svg>'>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#05070c;color:#d9e8dc;font:15px/1.6 Verdana,sans-serif;
+    background-image:radial-gradient(ellipse at 50% -10%,rgba(255,210,124,.07),transparent 60%)}
+  .wrap{max-width:1080px;margin:0 auto;padding:34px 20px 80px}
+  header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:1px solid #1c2630;padding-bottom:18px}
+  h1{font:900 40px Arial Black;margin:0;color:#ffd27c;letter-spacing:-1px}
+  .sub{color:#7c8ba3;font-size:13px}
+  a{color:#7cf9a5}
+  .pledge{margin:26px 0;padding:18px 20px;border:1px solid #3a3016;background:rgba(255,210,124,.05);border-radius:10px}
+  .pledge b{color:#ffd27c}
+  .split{display:flex;gap:10px;margin-top:12px;height:16px;border-radius:8px;overflow:hidden}
+  .split i{display:block;height:100%}
+  .kjpbar{background:#ffd27c;width:75%}
+  .wickbar{background:#7cf9a5;width:25%}
+  .legend{display:flex;gap:20px;font-size:11px;color:#8ba3b8;margin-top:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:14px;margin:26px 0}
+  .card{border:1px solid #24303c;background:#0a0f15;border-radius:10px;padding:14px 15px}
+  .card h3{margin:0 0 4px;font:900 14px Arial Black;color:#e6f1ff}
+  .card .r{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#7c8ba3}
+  .card p{margin:8px 0 0;font-size:12px;color:#9db4cc;line-height:1.5}
+  .card .pool{margin-top:10px;font-size:11px;color:#ff9d5b;font-weight:700}
+  .Common{border-color:#2a4a38}.Uncommon{border-color:#2b4160}.Rare{border-color:#4a3560}
+  .Epic{border-color:#6a4020}.Legendary{border-color:#7a6320;background:#12100a}
+  .box{border:1px solid #24303c;background:#080d12;border-radius:12px;padding:22px;margin:26px 0}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  button{background:#1a3a26;border:1px solid #2f7a4d;color:#baf7cf;border-radius:8px;
+    padding:14px 22px;font:900 14px Arial Black;cursor:pointer}
+  button:hover:not(:disabled){background:#255233}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.gold{background:#3a2f10;border-color:#8a6d2f;color:#ffd27c}
+  input[type=number]{width:76px;background:#060a10;border:1px solid #2c4a68;color:#e6f1ff;
+    border-radius:8px;padding:13px 10px;font:900 16px Arial Black;text-align:center}
+  .stat{font:900 22px Arial Black;color:#e6f1ff}
+  .muted{color:#57717f;font-size:12px}
+  #msg{margin-top:14px;font-size:13px;min-height:20px}
+  #msg.bad{color:#ff8f8f}#msg.good{color:#7cf9a5}
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid #1c2630;color:#57717f;font-size:12px}
+  .warn{border-color:#5a3a1a;background:rgba(255,157,91,.06);color:#ffc59d}
+</style>
+</head><body><div class="wrap">
+
+<header>
+  <h1>KJP GEAR</h1>
+  <div class="sub">FIELD ISSUE · 100 pieces · PulseChain</div>
+</header>
+
+<div class="pledge">
+  <div><b>Every mint burns itself.</b> The PLS is split inside the mint transaction:
+  <b>75% buys &amp; burns KJP</b>, <b>25% buys &amp; burns WICK</b>, both straight to the dead address.
+  There is <b>no withdraw function</b> in the contract — the split is bytecode, not a promise.</div>
+  <div class="split"><i class="kjpbar"></i><i class="wickbar"></i></div>
+  <div class="legend"><span>■ 75% → KJP burn</span><span>■ 25% → WICK burn</span></div>
+</div>
+
+<div class="box">
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <div class="stat" id="supply">— / 100</div>
+      <div class="muted">minted</div>
+    </div>
+    <div>
+      <div class="stat" id="price">1,000,000 PLS</div>
+      <div class="muted">each · max 5 per tx</div>
+    </div>
+    <div class="row">
+      <input type="number" id="qty" value="1" min="1" max="5">
+      <button id="mintBtn" class="gold" disabled>MINT</button>
+      <button id="connectBtn">CONNECT</button>
+    </div>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<h2 style="font:900 18px Arial Black;color:#9fd7b0;margin:30px 0 0">THE EIGHT — every piece works in <span style="color:#ffd27c">both games</span></h2>
+<div class="muted" style="margin-top:6px">Gear rides the operative, not the gun: no slots, no gun required. Drawn at mint from the remaining pool.</div>
+<div class="grid" id="grid"></div>
+
+<footer>
+  Contract: <span id="addr" class="muted">not deployed yet</span><br>
+  Games: <a href="https://kjp-game.wick.pics">kjp-game.wick.pics</a> · <a href="https://games.wick.pics">games.wick.pics</a> ·
+  Guns: <a href="https://mint.wick.pics">mint.wick.pics</a><br>
+  See you in the courtroom.
+</footer>
+</div>
+
+<script>
+/* KJP GEAR mint — no bundler, no framework. Reads the contract for supply and
+   price, mints through the injected wallet. When GEAR_ADDR is still zero the
+   page says so honestly instead of pretending to be live. */
+const GEAR_ADDR = "0x0000000000000000000000000000000000000000";   // paste after tools/deploy-gear.mjs
+const PULSE_RPC = "https://rpc.pulsechain.com";
+const CHAIN_ID  = 369;
+const LIVE = !/^0x0{40}$/.test(GEAR_ADDR);
+
+const GEAR = [
+  { n:"SUPPRESSOR",     r:"Common",    pool:22, kjp:"silences every lethal gun you carry",       pw:"subsonic tune: tighter spread, +5% rate" },
+  { n:"KEVLAR WEAVE",   r:"Common",    pool:20, kjp:"+1 ♥ and the first hit of each op absorbed", pw:"+1 ♥" },
+  { n:"TACTICAL BOOTS", r:"Uncommon",  pool:16, kjp:"+8% movement, running 25% quieter",          pw:"+8% move speed" },
+  { n:"EXTENDED MAGS",  r:"Uncommon",  pool:14, kjp:"+33% magazine on every firearm",             pw:"+12% fire rate" },
+  { n:"NIGHT OPTICS",   r:"Rare",      pool:12, kjp:"TAC-MAP never jams, even in COMBAT",         pw:"+40% i-frames after a hit" },
+  { n:"K9 TREATS",      r:"Rare",      pool:8,  kjp:"dogs take twice as long to place your scent", pw:"HOUNDS rush 25% slower" },
+  { n:"SKELETON KEY",   r:"Epic",      pool:5,  kjp:"opens ANY locked door — no keycard",         pw:"+40% CASE from crates" },
+  { n:"GOLD BRIEFCASE", r:"Legendary", pool:3,  kjp:"×1.25 score, every exhibit pays double",     pw:"+10% score" }
+];
+document.getElementById("grid").innerHTML = GEAR.map(g => `
+  <div class="card ${g.r}">
+    <h3>${g.n}</h3>
+    <div class="r">${g.r}</div>
+    <p><b style="color:#7cf9a5">KJP</b> — ${g.kjp}</p>
+    <p><b style="color:#8fc7ff">PEPE WICK</b> — ${g.pw}</p>
+    <div class="pool">${g.pool} of 100</div>
+  </div>`).join("");
+
+const $ = id => document.getElementById(id);
+const say = (t, cls) => { const m = $("msg"); m.textContent = t; m.className = cls || ""; };
+let acct = null, priceWei = 1000000n * 10n ** 18n;
+
+async function rpc(method, params){
+  const r = await fetch(PULSE_RPC, { method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ jsonrpc:"2.0", id:1, method, params }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  return j.result;
+}
+const call = data => rpc("eth_call", [{ to: GEAR_ADDR, data }, "latest"]);
+
+async function refresh(){
+  if (!LIVE){
+    $("addr").textContent = "not deployed yet";
+    document.querySelector(".box").classList.add("warn");
+    say("The gear contract is compiled and tested but not deployed yet — this page goes live the moment it is.", "");
+    $("connectBtn").disabled = true;
+    return;
+  }
+  $("addr").textContent = GEAR_ADDR;
+  try{
+    const [sup, pr, open] = await Promise.all([
+      call("0x18160ddd"),                       // totalSupply()
+      call("0x6817c76c"),                       // mintPrice()
+      call("0x1b3ed722")                        // mintOpen()
+    ]);
+    const supply = parseInt(sup, 16);
+    priceWei = BigInt(pr);
+    $("supply").textContent = supply + " / 100";
+    $("price").textContent = (Number(priceWei / 10n ** 18n)).toLocaleString() + " PLS";
+    const isOpen = /1$/.test(open);
+    if (!isOpen) say("Mint is not open yet.", "");
+    else if (supply >= 100) say("SOLD OUT — 100/100. Secondary only.", "");
+    else $("mintBtn").disabled = !acct;
+  }catch(e){ say("Could not read the contract: " + e.message, "bad"); }
+}
+
+$("connectBtn").onclick = async () => {
+  if (!window.ethereum){ say("No wallet found — install MetaMask or Rabby.", "bad"); return; }
+  try{
+    const a = await window.ethereum.request({ method:"eth_requestAccounts" });
+    acct = a[0];
+    const cid = await window.ethereum.request({ method:"eth_chainId" });
+    if (parseInt(cid, 16) !== CHAIN_ID){
+      try{ await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{ chainId:"0x171" }] }); }
+      catch{ say("Switch your wallet to PulseChain (369).", "bad"); return; }
+    }
+    $("connectBtn").textContent = acct.slice(0,6) + "…" + acct.slice(-4);
+    say("connected", "good");
+    refresh();
+  }catch(e){ say("connect cancelled", "bad"); }
+};
+
+$("mintBtn").onclick = async () => {
+  if (!acct || !LIVE) return;
+  const qty = Math.max(1, Math.min(5, +$("qty").value || 1));
+  const value = priceWei * BigInt(qty);
+  const data = "0xa0712d68" + qty.toString(16).padStart(64, "0");    // mint(uint256)
+  try{
+    say("confirm in your wallet…");
+    const tx = await window.ethereum.request({ method:"eth_sendTransaction", params:[{
+      from: acct, to: GEAR_ADDR, value: "0x" + value.toString(16), data }] });
+    say("minting… " + tx.slice(0,10) + "  (75% of that is already burning KJP)", "good");
+    const poll = setInterval(async () => {
+      const r = await rpc("eth_getTransactionReceipt", [tx]).catch(() => null);
+      if (!r) return;
+      clearInterval(poll);
+      say(parseInt(r.status,16) === 1 ? "✓ minted — check your wallet, then play kjp-game.wick.pics" : "transaction reverted", parseInt(r.status,16) === 1 ? "good" : "bad");
+      refresh();
+    }, 3000);
+  }catch(e){ say((e && e.message) || "mint failed", "bad"); }
+};
+
+refresh();
+</script>
+</body></html>

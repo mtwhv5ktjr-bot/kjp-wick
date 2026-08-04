@@ -1402,7 +1402,8 @@ function drawRadar(){
   brackets(rx, ry0, RW, RH, "rgba(124,249,165,0.45)");
   g.font = "900 8px Arial Black"; g.fillStyle = "#4a6a58";
   g.fillText("TAC-MAP", rx + 8, ry0 + 12);
-  if (LV.alert === 2){
+  /* NIGHT OPTICS (gear 5) keeps the map alive through the jamming */
+  if (LV.alert === 2 && !hasGear(5)){
     for (let i = 0; i < 300; i++){
       g.fillStyle = `rgba(140,220,170,${Math.random() * 0.3})`;
       g.fillRect(rx + 2 + Math.random() * (RW - 4), ry0 + 2 + Math.random() * (RH - 4), 2, 2);
@@ -1410,6 +1411,10 @@ function drawRadar(){
     g.font = "900 13px Arial Black"; g.fillStyle = "#ff5b5b"; g.textAlign = "center";
     g.fillText("— JAMMED —", rx + RW / 2, ry0 + RH / 2 + 4); g.textAlign = "left";
     return;
+  }
+  if (LV.alert === 2){
+    g.font = "900 7px Arial Black"; g.fillStyle = "#c792ff";
+    g.fillText("OPTICS", rx + RW - 42, ry0 + 12);
   }
   const sc = Math.min((RW - 8) / RADARPRE.width, (RH - 18) / RADARPRE.height);
   const ox = rx + (RW - RADARPRE.width * sc) / 2, oy = ry0 + 14 + (RH - 18 - RADARPRE.height * sc) / 2;

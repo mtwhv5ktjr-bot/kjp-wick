@@ -17,7 +17,8 @@ function initEnts(){
   srand(LV.n * 7777 + 13);
   P = {
     isPlayer: true, x: LV.spawn.x * T + T / 2, y: LV.spawn.y * T + T / 2, ang: -Math.PI / 2,
-    hpMax: 3 + (hasHolo() ? 1 : 0), hp: 3 + (hasHolo() ? 1 : 0),
+    hpMax: 3 + (hasHolo() ? 1 : 0) + (hasGear(2) ? 1 : 0), hp: 3 + (hasHolo() ? 1 : 0) + (hasGear(2) ? 1 : 0),
+    plate: hasGear(2),                       // KEVLAR WEAVE: eats the first hit of the op
     sneak: false, moving: 0, stepT: 0, dead: false,
     weapons: ["fists", "tranq"], wi: 1, fireT: 0, reloadT: 0,
     ammoIn: { tranq: WEAPONS.tranq.mag }, darts: 12 + (skinDef().dartBonus || 0), rounds: {},
@@ -176,7 +177,8 @@ function playerUpdate(dt){
   const mlen = Math.hypot(mx, my);
   if (mlen > 1){ mx /= mlen; my /= mlen; }
   const chokeLock = !!P.choke, dragging = !!P.drag;
-  let spd = P.sneak ? 78 : P.runHeld ? 216 : 138;
+  const boots = hasGear(3) ? 1.08 : 1;                    // TACTICAL BOOTS
+  let spd = (P.sneak ? 78 : P.runHeld ? 216 : 138) * boots;
   if (dragging) spd = Math.min(spd, 66);
   if (chokeLock) spd = 0;
   P.moving = mlen > 0.15 ? 1 : 0;
@@ -188,7 +190,8 @@ function playerUpdate(dt){
     if (P.stepT <= 0){
       P.stepT = 0.3;
       SFX.step(P.runHeld);
-      if (!P.sneak) addNoise(P.x, P.y, P.runHeld ? 165 : 55, "step");
+      const soft = hasGear(3) ? 0.75 : 1;                 // BOOTS: run 25% quieter
+      if (!P.sneak) addNoise(P.x, P.y, (P.runHeld ? 165 : 55) * soft, "step");
     }
   }
   /* vents force a crouch — you crawl in a duct, you don't jog */
@@ -253,7 +256,11 @@ function playerUpdate(dt){
   _lasers();
   _exitCheck(dt);
 }
-function _unlockedDoors(){ return { Y: LV.cards.y, B: LV.cards.b, R: LV.cards.r }; }
+/* SKELETON KEY (gear 7) picks every colour — the cards become souvenirs */
+function _unlockedDoors(){
+  if (hasGear(7)) return { Y: true, B: true, R: true };
+  return { Y: LV.cards.y, B: LV.cards.b, R: LV.cards.r };
+}
 function _reserveFor(id){ return WEAPONS[id].dart ? P.darts : (P.rounds[id] || 0); }
 function _finishReload(){
   const id = curWid(), w = WEAPONS[id];
@@ -399,7 +406,7 @@ function _interactions(dt){
   const fx = Math.floor((P.x + Math.cos(P.ang) * 34) / T), fy = Math.floor((P.y + Math.sin(P.ang) * 34) / T);
   const d = doorAtT(fx, fy);
   if (d && (d.kind === "Y" || d.kind === "B" || d.kind === "R") && !d.unlockedByPlayer && !d.broken){
-    if (LV.cards[d.kind.toLowerCase()]) P.ctx = null;   // proximity opens it
+    if (LV.cards[d.kind.toLowerCase()] || hasGear(7)) P.ctx = null;   // proximity opens it
     else P.ctx = "LOCKED — NEED " + (d.kind === "Y" ? "YELLOW" : d.kind === "B" ? "BLUE" : "RED") + " CARD";
   }
   if (d && d.kind === "C" && LV.hacks < (LV.def.hacksNeed || 0)) P.ctx = "SEALED — HACK THE TERMINALS";
@@ -473,6 +480,12 @@ function _exitCheck(dt){
 }
 function playerHit(dmg){
   if (P.dead || LV.over || P.god) return;
+  if (P.plate){                                   // KEVLAR WEAVE eats one hit, loudly
+    P.plate = false; P.hurtT = 0.3; shake(5); SFX.hit();
+    toast("🛡 KEVLAR ATE THAT ONE", "#9fd7b0");
+    fxRing(P.x, P.y, "#9fd7b0");
+    return;
+  }
   P.hp -= dmg; P.hurtT = 0.4; shake(6); SFX.hurt();
   fxBlood(P.x, P.y, 6, "#7cf9a5");
   if (P.hp <= 0){ P.dead = true; LV.over = "dead"; musicWant("calm"); }
@@ -642,10 +655,11 @@ function dogUpdate(e, dt){
   if (e.stagT > 0){ e.stagT -= dt; return; }
   const d = dist(e.x, e.y, P.x, P.y);
   /* scent: through walls, defeated only by stillness+crouch */
+  const treats = hasGear(6) ? 0.5 : 1;              // K9 TREATS: the nose doubts itself
   if (!P.dead && d < 150){
     const still = P.sneak && !P.moving;
-    e.detect = Math.min(1, e.detect + dt * (still ? 0.1 : 0.5));
-  } else if (seesPlayer(e, 230, 0.9, true) > 0){ e.detect = Math.min(1, e.detect + dt * 2.4); }
+    e.detect = Math.min(1, e.detect + dt * (still ? 0.1 : 0.5) * treats);
+  } else if (seesPlayer(e, 230, 0.9, true) > 0){ e.detect = Math.min(1, e.detect + dt * 2.4 * treats); }
   else e.detect = Math.max(0, e.detect - dt * 0.4);
   if (e.detect >= 1 && e.st !== "alert"){
     e.st = "alert";

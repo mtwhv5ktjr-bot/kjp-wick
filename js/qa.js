@@ -28,13 +28,47 @@ function runQA(){
   });
   t("lethal guns ship LOUD", () =>
     ["n1", "n2", "n3", "n4", "n5", "p9", "smg"].every(id => !WEAPONS[id].silenced && WEAPONS[id].noise > 200));
-  t("suppressor mod silences", () => {
-    const bak = window.ownedModTypes;
-    window.ownedModTypes = [7]; bumpMods();
-    const s = wSpec("n1");
-    const ok = s.silenced === true && s.noise <= 85;
-    window.ownedModTypes = bak || []; bumpMods();
+  /* SUPPRESSOR lives in KJP GEAR now, and gear rides the OPERATIVE — so it
+     must silence agency pickups too, not just the NFT guns. */
+  /* NB: these save/restore the real wallet gear — a cached loadout must not
+     decide whether the suite passes. Assert BOTH poles explicitly. */
+  t("gear suppressor silences every firearm", () => {
+    const bak = window.ownedGearTypes;
+    window.ownedGearTypes = []; bumpMods();
+    const off = !wSpec("p9").silenced && !wSpec("n1").silenced;
+    window.ownedGearTypes = [1]; bumpMods();
+    const a = wSpec("n1"), b = wSpec("p9");
+    const on = a.silenced === true && a.noise <= 85 && b.silenced === true && b.noise <= 85;
+    window.ownedGearTypes = bak || []; bumpMods();
+    return off && on;
+  });
+  t("gear mags scale magazines", () => {
+    const bak = window.ownedGearTypes;
+    window.ownedGearTypes = [4]; bumpMods();
+    const ok = wSpec("p9").mag === Math.round(WEAPONS.p9.mag * 1.33);
+    window.ownedGearTypes = bak || []; bumpMods();
     return ok;
+  });
+  t("gear pools total exactly 100", () =>
+    Object.values(GEARDEFS).reduce((n, d) => n + d.pool, 0) === 100 && Object.keys(GEARDEFS).length === 8);
+  t("gear ids are contiguous 1..8", () =>
+    Object.keys(GEARDEFS).every((k, i) => +k === i + 1));
+  t("skeleton key opens every colour", () => {
+    const bak = window.ownedGearTypes, sv = LV;
+    loadLevel(1);
+    window.ownedGearTypes = []; bumpMods();
+    const shut = !_unlockedDoors().Y;                    // no card, no key, no entry
+    window.ownedGearTypes = [7]; bumpMods();
+    const u = _unlockedDoors();
+    const open = u.Y && u.B && u.R;
+    window.ownedGearTypes = bak || []; bumpMods();
+    LV = sv;
+    return shut && open;
+  });
+  t("gold briefcase stays under the board ceiling", () => {
+    // 6 ops x (clear+time+ghost+pacifist+intel*2) x1.25 must clear 300k with room
+    const perOp = (SC.clear + SC.timeMax + SC.ghost + SC.pacifist + 6 * SC.intel * 2) * 1.25;
+    return perOp * 6 < 300000;
   });
   t("agency iron takes no mods", () => {
     const bak = window.ownedModTypes;

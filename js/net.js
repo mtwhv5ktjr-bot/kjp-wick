@@ -7,6 +7,10 @@ const NFT_VERIFY_URL = "https://wick-arsenal.vercel.app/api/verify";
 const LB_URL = "https://wick-arsenal.vercel.app/api/leaderboard";
 const GUNS_ADDR = "0x188848DdB42fA8Ca2EB05649c944e05dfA2158FD";   // WickGuns — LIVE on PulseChain
 const MODS_ADDR = "0x004E6610ff47c6A6510DA446257822B37D26CD73";   // WickMods attachments
+/* KJP GEAR — the 100-piece cross-game mint. Paste the address after
+   tools/deploy-gear.mjs; all-zero = "not deployed yet" and the game simply
+   runs gearless. The same address goes in pepe-zero's GEAR_ADDR. */
+const GEAR_ADDR = "0x0000000000000000000000000000000000000000";
 const PULSE_RPC = "https://rpc.pulsechain.com";
 /* Reown (WalletConnect) — public client identifier, safe to ship */
 const REOWN_ID = "02101ae7f77b3ea70f50919779025201";
@@ -35,7 +39,7 @@ async function getEth(){
     rpcMap: { 369: PULSE_RPC },
     showQrModal: true,
     metadata: { name: "KJP — THE BLACK FILE", description: "Top-down stealth in the $WICK universe.",
-      url: "https://kjp.wick.pics", icons: ["https://games.wick.pics/icon-192.png"] }
+      url: "https://kjp-game.wick.pics", icons: ["https://games.wick.pics/icon-192.png"] }
   });
   return wcProvider;
 }
@@ -50,7 +54,7 @@ async function connectWallet(){
     if (eth === window.ethereum) accts = await eth.request({ method: "eth_requestAccounts" });
     else { walletStatus = "approve in your wallet app, then come back…"; accts = await eth.enable(); }
     const addr = accts[0];
-    walletStatus = "loading your guns…";
+    walletStatus = "loading your loadout…";
     let types = null, mods = [];
     try{
       const r = await fetchT(NFT_VERIFY_URL + "?address=" + addr); const d = await r.json();
@@ -58,7 +62,8 @@ async function connectWallet(){
                          mods = [...new Set((d.mods || []).map(x => x.type))]; }
     }catch(e){}
     if (types === null){ types = await rpcGunsOf(addr); mods = await rpcModsOf(addr); }   // API down → straight to PulseChain
-    applyGuns(types, addr, false, false, mods);
+    const gear = await rpcGearOf(addr);      // gear is KJP-native: always read from chain
+    applyGuns(types, addr, false, false, mods, gear);
   }catch(e){
     walletAddr = null; watchMode = false;
     walletStatus = (e && (e.message || e.code)) ? ("error: " + (e.shortMessage || e.message || e.code)) : "connect cancelled";
@@ -66,7 +71,9 @@ async function connectWallet(){
   walletBusy = false;
 }
 function disconnectWallet(){
-  walletAddr = null; watchMode = false; window.ownedGunTypes = [];
+  walletAddr = null; watchMode = false;
+  window.ownedGunTypes = []; window.ownedModTypes = []; window.ownedGearTypes = [];
+  bumpMods();
   walletStatus = "unlinked";
   try{ localStorage.removeItem("kjp_nft"); }catch(e){}
   reconcileSkin();
@@ -81,15 +88,16 @@ async function verifyWatch(addrRaw){
   walletBusy = true; walletStatus = "looking up guns on-chain…";
   let applied = null;
   try{
+    const gear = await rpcGearOf(addr);
     const r = await fetchT(NFT_VERIFY_URL + "?address=" + addr); const data = await r.json();
     if (r.ok && data.ok){
       applyGuns([...new Set((data.guns || []).map(x => x.type))], addr, true, false,
-        [...new Set((data.mods || []).map(x => x.type))]);
+        [...new Set((data.mods || []).map(x => x.type))], gear);
       walletBusy = false; return { addr };
     }
     throw new Error((data && data.error) || "api-down");
   }catch(e){
-    try{ applyGuns(await rpcGunsOf(addr), addr, true, false, await rpcModsOf(addr)); applied = { addr }; }
+    try{ applyGuns(await rpcGunsOf(addr), addr, true, false, await rpcModsOf(addr), await rpcGearOf(addr)); applied = { addr }; }
     catch(e2){ walletStatus = "lookup failed — try again or CONNECT"; }
   }
   walletBusy = false;
@@ -107,14 +115,15 @@ async function rpcGunsOf(addr){
   for (let i = 0; i < tLen; i++){ const v = word(tOff + 1 + i); if (isFinite(v)) types.push(v); }
   return [...new Set(types)];
 }
-/* mods are a bonus — failures return [] instead of throwing, a mods hiccup
-   must never block gun verification (pepe-zero house rule) */
-async function rpcModsOf(addr){
+/* mods + gear are bonuses — failures return [] instead of throwing, a hiccup
+   here must never block gun verification (pepe-zero house rule). Both read the
+   identical (uint256[] ids, uint8[] types) shape, so one decoder serves both. */
+async function rpcTypesOf(contract, selector, addr){
   try{
-    if (/^0x0{40}$/.test(MODS_ADDR)) return [];
-    const data = "0x8d56809a" + addr.slice(2).toLowerCase().padStart(64, "0");   // modsOfOwner(address)
+    if (/^0x0{40}$/.test(contract)) return [];
+    const data = selector + addr.slice(2).toLowerCase().padStart(64, "0");
     const r = await fetchT(PULSE_RPC, { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: MODS_ADDR, data }, "latest"] }) });
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: contract, data }, "latest"] }) });
     const j = await r.json(); if (!j.result || j.result === "0x") return [];
     const hex = j.result.slice(2), word = i => parseInt(hex.slice(i * 64, i * 64 + 64), 16);
     const tOff = word(1) / 32, tLen = word(tOff), types = [];
@@ -123,23 +132,30 @@ async function rpcModsOf(addr){
     return [...new Set(types)];
   }catch(e){ return []; }
 }
-function applyGuns(types, addr, watch, quiet, mods){
+const rpcModsOf = addr => rpcTypesOf(MODS_ADDR, "0x8d56809a", addr);   // modsOfOwner(address)
+const rpcGearOf = addr => rpcTypesOf(GEAR_ADDR, "0xfce8c498", addr);   // gearOfOwner(address)
+function applyGuns(types, addr, watch, quiet, mods, gear){
   types = Array.isArray(types) ? types.filter(n => typeof n === "number" && isFinite(n)) : [];
-  window.ownedGunTypes = types;
   window.ownedModTypes = Array.isArray(mods) ? mods.filter(n => typeof n === "number" && isFinite(n) && MODDEFS[n]) : [];
-  bumpMods();                                    // weapon specs are stale the moment the mod set changes
+  window.ownedGearTypes = Array.isArray(gear) ? gear.filter(n => typeof n === "number" && isFinite(n) && GEARDEFS[n]) : [];
+  window.ownedGunTypes = types;
+  bumpMods();                                    // weapon specs are stale the moment mods/gear change
   watchMode = !!watch;
   walletAddr = watch ? null : addr;
   window.watchAddr = watch ? addr : null;
   const ids = nftWeaponIds(types);
-  walletStatus = types.length
-    ? (watch ? "👁 watch: " : "✓ ") + ids.length + " stealth-tuned gun" + (ids.length > 1 ? "s" : "") + " unlocked"
-      + (window.ownedModTypes.length ? " · " + window.ownedModTypes.length + " mod" + (window.ownedModTypes.length > 1 ? "s" : "") : "")
-      + (hasHolo() ? " · HOLO +1♥" : "") + (watch ? " — CONNECT to submit scores" : "")
-    : (watch ? "👁 watching — no WICK guns there" : "✓ connected — no WICK guns in wallet");
-  try{ localStorage.setItem("kjp_nft", JSON.stringify({ addr, types, mods: window.ownedModTypes, watch: !!watch, ts: Date.now() })); }catch(e){}
+  const nGear = window.ownedGearTypes.length;
+  const bits = [];
+  if (ids.length) bits.push(ids.length + " gun" + (ids.length > 1 ? "s" : ""));
+  if (window.ownedModTypes.length) bits.push(window.ownedModTypes.length + " mod" + (window.ownedModTypes.length > 1 ? "s" : ""));
+  if (nGear) bits.push(nGear + " gear");
+  walletStatus = bits.length
+    ? (watch ? "👁 watch: " : "✓ ") + bits.join(" · ") + (hasHolo() ? " · HOLO +1♥" : "")
+      + (watch ? " — CONNECT to submit scores" : "")
+    : (watch ? "👁 watching — nothing from the WICK universe there" : "✓ connected — no WICK NFTs in wallet");
+  try{ localStorage.setItem("kjp_nft", JSON.stringify({ addr, types, mods: window.ownedModTypes, gear: window.ownedGearTypes, watch: !!watch, ts: Date.now() })); }catch(e){}
   reconcileSkin();
-  if (types.length && !quiet) SFX.unlock();
+  if ((types.length || nGear) && !quiet) SFX.unlock();
 }
 /* boot restore: 24h cache, then silent refresh */
 (function restoreNft(){
@@ -148,7 +164,7 @@ function applyGuns(types, addr, watch, quiet, mods){
   const urlW = (/[?&#]w=(0x[a-fA-F0-9]{40})/.exec(location.search + location.hash) || [])[1] || null;
   if (urlW){ setTimeout(() => verifyWatch(urlW), 400); return; }
   if (saved && Array.isArray(saved.types) && Date.now() - (saved.ts || 0) < 864e5){
-    applyGuns(saved.types, saved.addr, saved.watch, true, saved.mods);
+    applyGuns(saved.types, saved.addr, saved.watch, true, saved.mods, saved.gear);
     walletStatus += " (cached)";
   }
 })();

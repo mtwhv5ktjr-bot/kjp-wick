@@ -195,8 +195,13 @@ function updateDoors(dt, actors){
       if (Math.abs(a.x - cx) > 70 || Math.abs(a.y - cy) > 70) continue;
       if (gated) continue;
       if (a.isPlayer){
+        const picks = typeof hasGear === "function" && hasGear(7);   // SKELETON KEY
         if (d.kind === "D" || d.kind === "C" || d.unlockedByPlayer){ want = 1; }
-        else if (LV.cards[d.kind.toLowerCase()]){ d.unlockedByPlayer = true; want = 1; if (typeof SFX !== "undefined") SFX.card(); }
+        else if (LV.cards[d.kind.toLowerCase()] || picks){
+          d.unlockedByPlayer = true; want = 1;
+          if (typeof SFX !== "undefined") SFX.card();
+          if (picks && !LV.cards[d.kind.toLowerCase()] && typeof toast === "function") toast("🗝 skeleton key — no card required", "#ff9d5b");
+        }
       } else want = 1;                       // staff badge through everything non-gated
     }
     d.open += ((want ? 1 : 0) - d.open) * Math.min(1, dt * 7);

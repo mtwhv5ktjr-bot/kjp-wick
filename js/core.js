@@ -289,17 +289,17 @@ const WEAPONS = {
      does a buy & burn on KJP. Darts (HUSH-9 / REAPER) are pneumatic: quiet by
      nature, not by attachment — stealth always has a baseline tool. */
   n1: { name: "BOOGEYMAN P30", nft: 1, dmg: 1.5, mag: 15, rps: 3.6, spd: 1150, noise: 280, spread: 0.012, icon: "🔫",
-        blurb: "lethal sidearm — the classic. pairs with a SUPPRESSOR mod" },
+        blurb: "the classic" },
   n2: { name: "CONTINENTAL VECTOR", nft: 2, dmg: 0.55, mag: 30, rps: 11, spd: 1000, noise: 300, spread: 0.05, auto: true, icon: "🔫",
-        blurb: "full-auto PDW — begs for a SUPPRESSOR mod" },
+        blurb: "full-auto PDW" },
   n3: { name: "KIMBER BREACHER", nft: 3, dmg: 0.8, pellets: 6, mag: 6, rps: 1.3, spd: 900, noise: 380, spread: 0.1, breach: true, icon: "🔫",
-        blurb: "6-pellet 12ga — BREACHES LOCKED DOORS" },
+        blurb: "12ga door-opener" },
   n4: { name: "TTI MARKSMAN", nft: 4, dmg: 3, mag: 8, rps: 1.1, spd: 1700, noise: 290, spread: 0.002, pierce: 2, scope: true, icon: "🔫",
-        blurb: "DMR — pierces two bodies. SUPPRESSOR mod makes it a whisper" },
+        blurb: "long-range DMR" },
   n5: { name: "EXCOMMUNICADO", nft: 5, dmg: 0.8, mag: 24, rps: 8, spd: 1150, noise: 330, spread: 0.02, auto: true, icon: "🔫",
-        blurb: "full-auto rifle. loud. decisive." },
+        blurb: "loud. decisive." },
   n6: { name: "TANGENTIAL REAPER", nft: 6, dart: true, sleep: 45, fan: 3, mag: 9, rps: 1.5, spd: 920, noise: 18, icon: "🎯",
-        blurb: "tri-dart tranq storm — the ghost cannon" }
+        blurb: "the ghost cannon" }
 };
 /* arsenal type -> weapon id (holo 11-16 grant the matching base type too) */
 function nftWeaponIds(types){
@@ -321,28 +321,64 @@ const MODDEFS = {
   4: { name: "LONG BARREL",     tag: "BARREL", apply: s => { s.spd *= 1.3; s.dmg *= 1.05; s.noise *= 0.85; } },
   5: { name: "AP ROUNDS",       tag: "AP",     apply: s => { s.pierce = (s.pierce || 0) + 1; } },
   6: { name: "DRAGON'S BREATH", tag: "DRAGON", apply: s => { if (!s.dart) s.pellets = (s.pellets || 1) + 1; } },
-  /* type 7 — THE SUPPRESSOR. Sold as its own mod drop; mint proceeds do a
-     buy & burn on KJP. Until that contract goes live nobody holds one, so
-     every lethal gun in the field is honestly LOUD. */
-  7: { name: "SUPPRESSOR",      tag: "SUPP",   apply: s => { s.silenced = true; s.noise = Math.min(s.noise, 85); } }
 };
+
+/* ================================================================
+   KJP GEAR — the 100-piece cross-game mint (KJPGear.sol). Field
+   equipment, not attachments: it rides the OPERATIVE, so it works on
+   every weapon including agency pickups, and every piece also works in
+   PEPE WICK. Mint proceeds: 75% buy&burn KJP + 25% buy&burn WICK,
+   automatic and withdraw-less. THE SUPPRESSOR LIVES HERE — no gun in
+   the game ships silenced.
+   ================================================================ */
+const GEARDEFS = {
+  1: { name: "SUPPRESSOR",     tag: "SUPP",  rare: "Common",    pool: 22,
+       blurb: "silences every lethal gun you carry",
+       gun: s => { s.silenced = true; s.noise = Math.min(s.noise, 85); } },
+  2: { name: "KEVLAR WEAVE",   tag: "KEVLAR", rare: "Common",   pool: 20,
+       blurb: "+1 ♥ and the first hit of each op is absorbed" },
+  3: { name: "TACTICAL BOOTS", tag: "BOOTS", rare: "Uncommon",  pool: 16,
+       blurb: "+8% movement, and running is 25% quieter" },
+  4: { name: "EXTENDED MAGS",  tag: "MAGS",  rare: "Uncommon",  pool: 14,
+       blurb: "+33% magazine on every firearm",
+       gun: s => { if (s.mag) s.mag = Math.round(s.mag * 1.33); } },
+  5: { name: "NIGHT OPTICS",   tag: "OPTICS", rare: "Rare",     pool: 12,
+       blurb: "TAC-MAP never jams, even in COMBAT" },
+  6: { name: "K9 TREATS",      tag: "K9",    rare: "Rare",      pool: 8,
+       blurb: "guard dogs take twice as long to place your scent" },
+  7: { name: "SKELETON KEY",   tag: "KEY",   rare: "Epic",      pool: 5,
+       blurb: "opens ANY locked door — no keycard needed" },
+  8: { name: "GOLD BRIEFCASE", tag: "GOLD",  rare: "Legendary", pool: 3,
+       blurb: "×1.25 score, and every exhibit pays double" }
+};
+window.ownedGearTypes = [];
+const hasGear = t => (window.ownedGearTypes || []).includes(t);
 window.ownedModTypes = [];
 let _specCache = {}, _specGen = -1;
 function bumpMods(){ _specCache = {}; _specGen++; }
-/* effective weapon spec: base + mods (NFT guns only — agency iron takes no attachments) */
+/* effective weapon spec:
+     base + MODS (NFT guns only — agency iron takes no attachments)
+          + GEAR (every firearm — it rides the operative, not the gun) */
 function wSpec(id){
   const base = WEAPONS[id];
-  if (!base || !base.nft) return base;
-  const key = id + ":" + (window.ownedModTypes || []).join(",");
+  if (!base || base.melee) return base;
+  const key = id + ":" + (window.ownedModTypes || []).join(",") + "|" + (window.ownedGearTypes || []).join(",");
   if (_specCache[key]) return _specCache[key];
   const s = Object.assign({}, base);
   const seen = new Set();
-  for (const m of window.ownedModTypes || []){
+  if (base.nft) for (const m of window.ownedModTypes || []){
     if (seen.has(m) || !MODDEFS[m]) continue;
     seen.add(m); MODDEFS[m].apply(s);
   }
+  const gseen = new Set();
+  for (const t of window.ownedGearTypes || []){
+    if (gseen.has(t) || !GEARDEFS[t]) continue;
+    gseen.add(t);
+    if (GEARDEFS[t].gun) GEARDEFS[t].gun(s);
+  }
   s.dmg = Math.round((s.dmg || 0) * 100) / 100;
   s.mods = [...seen];
+  s.gear = [...gseen].filter(t => GEARDEFS[t].gun);
   return _specCache[key] = s;
 }
 

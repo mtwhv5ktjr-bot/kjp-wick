@@ -6,6 +6,7 @@
     { "src": "assets/**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "/mint", "dest": "/mint.html" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]

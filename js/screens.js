@@ -197,7 +197,7 @@ function drawTitle(){
   g.fillStyle = "rgba(0,0,0,0.55)"; g.fillRect(0, 0, W, 26); g.fillRect(0, H - 26, W, 26);
   g.font = "700 10px monospace"; g.fillStyle = "#3d5a48";
   g.fillText("CLASSIFIED // KJP-ORIGIN // EYES ONLY", 20, 17);
-  g.textAlign = "right"; g.fillText("kjp.wick.pics", W - 20, 17); g.textAlign = "left";
+  g.textAlign = "right"; g.fillText("kjp-game.wick.pics", W - 20, 17); g.textAlign = "left";
   /* menu */
   const bx = 74, by = 392, bw = 300, bh = 46, gap = 12;
   btn(bx, by, bw, bh, "▶ INFILTRATE", () => { STATE = "select"; });
@@ -388,10 +388,13 @@ function computeResult(){
   const ghost = !(s.spotted > 0) && s.alarms === 0;
   const pacifist = s.kills === 0 && s.civHurt === 0;
   const timeBonus = Math.max(0, Math.round(SC.timeMax * (1 - LV.time / (LV.def.par * 2))));
-  let score = SC.clear + timeBonus + s.intel * SC.intel + s.alarms * SC.alarm + s.kills * SC.kill + s.civHurt * SC.civilian;
+  const gold = hasGear(8);                                    // GOLD BRIEFCASE
+  let score = SC.clear + timeBonus + s.intel * SC.intel * (gold ? 2 : 1)
+            + s.alarms * SC.alarm + s.kills * SC.kill + s.civHurt * SC.civilian;
   if (ghost) score += SC.ghost;
   if (pacifist) score += SC.pacifist;
   score = Math.max(500, score);
+  if (gold) score = Math.round(score * 1.25);
   const res = { score, time: LV.time, ghost, pacifist, combat: s.combats > 0, kills: s.kills, kos: s.kos, intel: s.intel, alarms: s.alarms };
   res.rank = rankFor(res);
   return res;
@@ -548,7 +551,7 @@ function drawArsenal(){
   g.fillStyle = "#05070c"; g.fillRect(0, 0, W, H);
   g.font = "900 34px Arial Black"; g.fillStyle = "#e6f1ff"; g.fillText("ARSENAL", 70, 78);
   g.font = "700 12px Verdana"; g.fillStyle = "#7c8ba3";
-  g.fillText("HANDS + HUSH-9 tranq are always on you. Your WICK ARSENAL NFTs come stealth-tuned — pick TWO to carry.", 70, 100);
+  g.fillText("HANDS + HUSH-9 tranq are always on you. WICK ARSENAL guns hit harder but ship LOUD — pick TWO to carry.", 70, 100);
   /* wallet box */
   const wx = W - 400, wy = 130;
   g.fillStyle = "rgba(8,14,12,0.9)"; g.fillRect(wx, wy, 330, 210);
@@ -613,12 +616,33 @@ function drawArsenal(){
       if (mx0 > 600){ mx0 = 70; y += 30; }
     }
   }
-  /* the one that isn't out yet */
-  y += 34;
-  g.font = "900 12px Arial Black"; g.fillStyle = "#8a97a8";
-  g.fillText("🔇 SUPPRESSOR — COMING SOON", 70, y);
-  g.font = "700 11px Verdana"; g.fillStyle = "#57717f";
-  g.fillText("every lethal gun ships LOUD. The suppressor drops as its own mod — mint does a BUY & BURN on KJP.", 70, y + 18);
+  /* ---- KJP GEAR: the 100-piece cross-game mint. Right column, under the
+     wallet box — the gun list owns the left and can grow. ---- */
+  const gearOwned = window.ownedGearTypes || [];
+  let gy = wy + 232;
+  g.font = "900 13px Arial Black"; g.fillStyle = "#ff9d5b";
+  g.fillText("KJP GEAR · 100 PIECES", wx, gy);
+  g.font = "700 9px Verdana"; g.fillStyle = "#8a97a8";
+  g.fillText(gearOwned.length ? "✦ " + gearOwned.length + "/8 types held — no slots, it rides you"
+                              : "works in KJP + PEPE WICK · mint at kjp-game.wick.pics/mint", wx, gy + 15);
+  g.fillStyle = "#57717f";
+  g.fillText("75% buys & burns KJP · 25% buys & burns WICK", wx, gy + 29);
+  gy += 40;
+  const cw2 = 160, ch2 = 56;
+  for (let t = 1; t <= 8; t++){
+    const d = GEARDEFS[t], col = (t - 1) % 2, row = (t - 1) / 2 | 0;
+    const x = wx + col * (cw2 + 10), yy = gy + row * (ch2 + 6);
+    const held = gearOwned.includes(t);
+    g.fillStyle = held ? "rgba(48,32,10,0.92)" : "rgba(9,14,18,0.75)";
+    g.fillRect(x, yy, cw2, ch2);
+    g.strokeStyle = held ? "#ff9d5b" : "#2a3540"; g.lineWidth = held ? 2 : 1;
+    g.strokeRect(x + 0.5, yy + 0.5, cw2 - 1, ch2 - 1);
+    g.font = "900 10px Arial Black"; g.fillStyle = held ? "#ffd27c" : "#6d7f8e";
+    g.fillText((held ? "◆ " : "") + d.name, x + 8, yy + 16);
+    wrapText2(d.blurb, x + 8, yy + 29, cw2 - 16, 10, held ? "#cbd9c9" : "#4e5c68", "700 8px Verdana");
+    g.font = "700 8px Verdana"; g.fillStyle = held ? "#ff9d5b" : "#414e59";
+    g.fillText(d.rare + " · " + d.pool, x + 8, yy + ch2 - 6);
+  }
   btn(W - 190, H - 78, 120, 40, "← BACK", () => { STATE = "title"; });
   dispatchClicks();
 }
@@ -636,13 +660,20 @@ function gunRow(id, y, clickable, cb, inCarry){
   g.font = "900 14px Arial Black"; g.fillStyle = w2.nft ? "#ffd27c" : "#cfe3d2";
   g.fillText((w2.nft ? "◆ " : "") + w2.name, tx0, y + 23);
   g.font = "700 10px Verdana"; g.fillStyle = "#8ba3b8";
-  const spec2 = w2.nft ? wSpec(id) : w2;
+  const spec2 = w2.melee ? w2 : wSpec(id);   // gear rides every firearm, NFT or not
   const quiet2 = spec2.silenced || spec2.dart || spec2.noise < 100;
   const desc = w2.melee ? "choke · punch — silent-ish" :
     (quiet2 ? "QUIET" : "LOUD") + (w2.dart ? " · sleep dart" : " · lethal " + w2.dmg) + (w2.auto ? " · auto" : "") + (w2.pellets ? " · " + w2.pellets + " pellets" : "") + (w2.breach ? " · BREACHES DOORS" : "") + (spec2.pierce ? " · pierce" : "") + (w2.fan ? " · tri-dart" : "");
+  /* clip the description to the column the stats leave free — a long blurb
+     used to print straight through "mag 8 · noise 290" */
+  const statW = w2.mag ? 200 : 100;
+  g.save(); g.beginPath(); g.rect(tx0, y + 28, x + rw - statW - tx0, 20); g.clip();
   g.fillText(desc + (w2.blurb ? "  —  " + w2.blurb : ""), tx0, y + 41);
+  g.restore();
   if (w2.mag){
-    g.textAlign = "right"; g.fillStyle = "#7c8ba3"; g.fillText("mag " + w2.mag + " · noise " + w2.noise, x + rw - 96, y + 41); g.textAlign = "left";
+    g.textAlign = "right"; g.fillStyle = "#7c8ba3";
+    g.fillText("mag " + spec2.mag + (spec2.mag !== w2.mag ? "▲" : "") + " · noise " + spec2.noise + (spec2.noise !== w2.noise ? "▼" : ""), x + rw - 96, y + 41);
+    g.textAlign = "left";
   }
   if (clickable){
     g.font = "900 11px Arial Black"; g.fillStyle = inCarry ? "#ffd27c" : "#57717f";
@@ -687,8 +718,8 @@ function drawIntel(){
     y += 40;
   }
   g.font = "700 11px Verdana"; g.fillStyle = "#57717f";
-  g.fillText("KJP — a $WICK universe game on kjp.wick.pics · sister ops: games.wick.pics (PEPE WICK) · mint.wick.pics (WICK ARSENAL NFTs)", L, y + 14);
-  g.fillText("counsel's retainer (unchanged from the old kjp.wick.pics): 0x3848D41D6f439Ca645e9193c7680629A86B739ED", L, y + 32);
+  g.fillText("KJP — a $WICK universe game on kjp-game.wick.pics · sister ops: games.wick.pics (PEPE WICK) · mint.wick.pics (WICK ARSENAL NFTs)", L, y + 14);
+  g.fillText("counsel's retainer (unchanged from the old kjp-game.wick.pics): 0x3848D41D6f439Ca645e9193c7680629A86B739ED", L, y + 32);
   btn(W - 190, H - 78, 120, 40, "← BACK", () => { STATE = "title"; });
   dispatchClicks();
 }

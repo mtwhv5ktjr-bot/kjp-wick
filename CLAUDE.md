@@ -2,7 +2,7 @@
 
 Top-down (birds-eye) MGS-style stealth game. KJP — attorney at law, the Agency's
 deniable asset — breaks INTO the C.I.A. to steal his own file. Lives at
-**kjp.wick.pics** (which previously served the one-page "Kenny John Pierre — Law"
+**kjp-game.wick.pics** (which previously served the one-page "Kenny John Pierre — Law"
 site; its catchphrase "See you in the courtroom." and retainer address
 0x3848D41D6f439Ca645e9193c7680629A86B739ED are kept as lore/footer).
 
@@ -10,7 +10,7 @@ site; its catchphrase "See you in the courtroom." and retainer address
 
 - `dev.cmd` → http://localhost:8100 (portable node, no deps; 8096 was taken)
 - Deploy: `npx vercel deploy --prod --yes` (project **kjp-wick**, team pangler;
-  CLI auth lives at %APPDATA%\xdg.data\com.vercel.cli). kjp.wick.pics is
+  CLI auth lives at %APPDATA%\xdg.data\com.vercel.cli). kjp-game.wick.pics is
   ATTACHED + aliased on Vercel; it goes live the moment the wick.pics zone at
   Cloudflare gets `A kjp 76.76.21.21` (DNS-only) — the proxied *.wick.pics
   wildcard currently serving the old law page loses to the specific record.
