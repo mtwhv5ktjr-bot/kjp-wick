@@ -416,15 +416,19 @@ function portBox(x, y, active){
   g.fillStyle = "rgba(10,18,14," + (active ? 0.35 : 0.6) + ")"; g.fillRect(x, y, 200, 210);
   if (!active){ g.fillStyle = "rgba(4,8,6,0.45)"; g.fillRect(x, y, 200, 210); }
 }
+/* returns the number of lines drawn, so callers can lay out with real heights
+   instead of assuming two — a three-line row in a fixed 30px slot silently
+   walks into whatever is below it */
 function wrapText2(txt, x, y, maxW, lh, col, font){
   g.font = font; g.fillStyle = col;
   const words = txt.split(" ");
-  let line = "", yy = y;
+  let line = "", yy = y, n = 1;
   for (const wd of words){
-    if (g.measureText(line + wd).width > maxW){ g.fillText(line, x, yy); yy += lh; line = wd + " "; }
+    if (g.measureText(line + wd).width > maxW){ g.fillText(line, x, yy); yy += lh; n++; line = wd + " "; }
     else line += wd + " ";
   }
   g.fillText(line, x, yy);
+  return n;
 }
 
 /* ---------- debrief / dead ---------- */
@@ -803,24 +807,34 @@ function drawIntel(){
     ["DETECTORS", "lobby gates ring on carried FIREARMS. The ceramic HUSH-9 and REAPER darts pass clean."],
     ["SHADOWS", "stand in the dark and every guard's sight range shrinks. Lamps can be SHOT OUT — a dart is the quiet way."],
     ["COIN", "F near yourself knocks; F at a distant spot flicks a coin THERE. Guards check the sound, not you."],
-    ["NFTs", "WICK ARSENAL guns hit harder but ship LOUD — the SUPPRESSOR mod (separate drop, buy & burn) quiets them. WICK MODS auto-fit (laser, AP, barrel…). Holo = +1 ♥."],
+    ["NFTs", "ARSENAL guns hit harder but ship LOUD — KJP GEAR's SUPPRESSOR quiets them. MODS auto-fit your guns; GEAR rides you, no slots. Holo = +1 ♥."],
     ["RANKS", "GHOST = never spotted, zero alarms · +PACIFIST = BABA YAGA. Intel = score."],
   ];
+  /* TWO COLUMNS. Twenty rows in one column ran 20px past the bottom of the
+     canvas and clipped the footer; splitting also halves the line length,
+     which is the readability win as much as the fit. */
   g.font = "700 12px Verdana";
-  let y = 118;
-  for (const [k, v] of rows){
-    g.fillStyle = "#7cf9a5"; g.font = "900 11px Arial Black"; g.fillText(k, L, y);
-    wrapText2(v, L + 130, y, 1010, 13, "#9db4cc", "700 11px Verdana");
-    y += 29;
-  }
+  const half = Math.ceil(rows.length / 2);
+  const COLW = 540, KEYW = 118, LH = 12;
+  const colY = [118, 118];
+  rows.forEach(([k, v], i) => {
+    const col = i < half ? 0 : 1;
+    const x = col ? L2 : L;
+    const y = colY[col];
+    g.fillStyle = "#7cf9a5"; g.font = "900 10px Arial Black"; g.fillText(k, x, y);
+    const lines = wrapText2(v, x + KEYW, y, COLW - KEYW, LH, "#9db4cc", "700 10px Verdana");
+    colY[col] += Math.max(26, lines * LH + 10);      // the row owns its real height
+  });
+  let y = Math.max(colY[0], colY[1]) + 16;
   if (IS_TOUCH){
-    g.fillStyle = "#ffd27c"; g.font = "900 12px Arial Black"; g.fillText("TOUCH", L, y);
-    wrapText2("left thumb — move stick · right thumb — aim · FIRE / ACT (E) / KNOCK (F) / RUN / SNEAK buttons bottom-right", L + 130, y, 980, 15, "#9db4cc", "700 12px Verdana");
-    y += 40;
+    g.fillStyle = "#ffd27c"; g.font = "900 11px Arial Black"; g.fillText("TOUCH", L, y);
+    wrapText2("left thumb — move stick · right thumb — aim · FIRE / ACT (E) / USE (V) / GEAR (G) / KNOCK (F) / RUN / SNEAK / FOCUS buttons on the right",
+      L + KEYW, y, 1010, 13, "#9db4cc", "700 10px Verdana");
+    y += 34;
   }
-  g.font = "700 11px Verdana"; g.fillStyle = "#57717f";
-  g.fillText("KJP — a $WICK universe game on kjp-game.wick.pics · sister ops: games.wick.pics (PEPE WICK) · mint.wick.pics (WICK ARSENAL NFTs)", L, y + 14);
-  g.fillText("counsel's retainer (unchanged from the old kjp-game.wick.pics): 0x3848D41D6f439Ca645e9193c7680629A86B739ED", L, y + 32);
+  g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
+  g.fillText("KJP — a $WICK universe game on kjp-game.wick.pics · sister ops: games.wick.pics (PEPE WICK) · mint.wick.pics (WICK ARSENAL NFTs)", L, y);
+  g.fillText("counsel's retainer: 0x3848D41D6f439Ca645e9193c7680629A86B739ED", L, y + 16);
   btn(W - 190, H - 78, 120, 40, "← BACK", () => { STATE = "title"; });
   dispatchClicks();
 }
@@ -830,12 +844,15 @@ function drawIntel(){
    cleared, and the lifetime tallies quietly tell you what kind of operative you
    turned out to be. Nothing here is busywork: every ribbon is a different way
    to play the same building. */
+/* `d` is the full rule (used where there is room); `s` is the card label —
+   a real short phrase, because truncating the long one produced fragments
+   like "clear without ever being" on the ribbon cards. */
 const CHALLENGES = [
-  { k: "ghost",    name: "GHOST",      d: "clear without ever being spotted",  has: r => r && r.ghost },
-  { k: "pacifist", name: "PACIFIST",   d: "clear without killing anyone",      has: r => r && r.pacifist },
-  { k: "silent",   name: "NO ALARMS",  d: "clear with zero alarms raised",     has: r => r && r.alarms === 0 },
-  { k: "swift",    name: "SWIFT",      d: "clear inside par time",             has: (r, n) => r && r.time <= LEVELS[n].par },
-  { k: "archivist",name: "ARCHIVIST",  d: "collect every exhibit in the op",   has: (r, n) => r && r.intel >= r.intelMax }
+  { k: "ghost",    name: "GHOST",      s: "never spotted",   d: "clear without ever being spotted",  has: r => r && r.ghost },
+  { k: "pacifist", name: "PACIFIST",   s: "no kills",        d: "clear without killing anyone",      has: r => r && r.pacifist },
+  { k: "silent",   name: "NO ALARMS",  s: "zero alarms",     d: "clear with zero alarms raised",     has: r => r && r.alarms === 0 },
+  { k: "swift",    name: "SWIFT",      s: "inside par time", d: "clear inside par time",             has: (r, n) => r && r.time <= LEVELS[n].par },
+  { k: "archivist",name: "ARCHIVIST",  s: "every exhibit",   d: "collect every exhibit in the op",   has: (r, n) => r && r.intel >= r.intelMax }
 ];
 function ribbonsFor(n){
   const r = PROG.lv[n];
@@ -881,15 +898,15 @@ function drawDossier(){
     g.font = "700 11px Verdana"; g.fillStyle = open ? "#8ba3b8" : "#3d4854";
     g.fillText(LEVELS[n].name, 122, y + 20);
     ribbonsFor(n).forEach((rb, i) => {
-      const x = 300 + i * 132;
+      const x = 300 + i * 142, cw2 = 134;
       g.fillStyle = rb.done ? "rgba(48,32,10,0.95)" : "rgba(9,14,18,0.7)";
-      g.fillRect(x, y, 124, 34);
+      g.fillRect(x, y, cw2, 34);
       g.strokeStyle = rb.done ? "#ffd27c" : "#243040"; g.lineWidth = rb.done ? 2 : 1;
-      g.strokeRect(x + 0.5, y + 0.5, 123, 33);
+      g.strokeRect(x + 0.5, y + 0.5, cw2 - 1, 33);
       g.font = "900 10px Arial Black"; g.fillStyle = rb.done ? "#ffd27c" : "#4e5c68";
       g.fillText((rb.done ? "★ " : "") + rb.c.name, x + 8, y + 15);
-      g.font = "700 7px Verdana"; g.fillStyle = rb.done ? "#a8b8a0" : "#3d4854";
-      g.fillText(rb.c.d.slice(0, 30), x + 8, y + 27);
+      g.font = "700 9px Verdana"; g.fillStyle = rb.done ? "#a8b8a0" : "#3d4854";
+      g.fillText(rb.c.s, x + 8, y + 27);
     });
     const best = PROG.lv[n];
     if (best){

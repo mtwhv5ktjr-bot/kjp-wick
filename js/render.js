@@ -1481,8 +1481,8 @@ function drawRadar(){
     return;
   }
   if (LV.alert === 2){
-    g.font = "900 7px Arial Black"; g.fillStyle = "#c792ff";
-    g.fillText("OPTICS", rx + RW - 42, ry0 + 12);
+    g.font = "900 9px Arial Black"; g.fillStyle = "#c792ff";
+    g.fillText("OPTICS", rx + RW - 46, ry0 + 12);
   }
   const sc = Math.min((RW - 8) / RADARPRE.width, (RH - 18) / RADARPRE.height);
   const ox = rx + (RW - RADARPRE.width * sc) / 2, oy = ry0 + 14 + (RH - 18 - RADARPRE.height * sc) / 2;
@@ -1546,10 +1546,10 @@ function drawTouchUI(){
     g.textAlign = "center";
     /* GEAR shows the selected gadget's icon so the belt is readable at a glance */
     if (b.k === "gadget" && P && P.gads && typeof GADGETS !== "undefined"){
-      g.font = "15px serif"; g.fillStyle = "#e6f1ff";
-      g.fillText(GADGETS[P.gads[P.gi]].ic, b.x, b.y + 2);
-      g.font = "900 7px Arial Black"; g.fillStyle = "#9fd7b0";
-      g.fillText("GEAR", b.x, b.y + 15);
+      g.font = "16px serif"; g.fillStyle = "#e6f1ff";
+      g.fillText(GADGETS[P.gads[P.gi]].ic, b.x, b.y + 1);
+      g.font = "900 9px Arial Black"; g.fillStyle = "#9fd7b0";
+      g.fillText("GEAR", b.x, b.y + 16);
     } else {
       g.font = "900 " + (b.r > 40 ? 15 : 11) + "px Arial Black";
       g.fillStyle = on ? "#0a1410" : "#9fd7b0";

@@ -765,6 +765,28 @@ function runQA100(){
     return counts.every(n => n > 0) || "a wallet state rendered no buttons";
   });
 
+  /* ═══ 8d. LAYOUT ═══ */
+  qgroup("8d · LAYOUT");
+  qok("no screen draws text off-canvas, overlapping, or under 8px", () => {
+    if (typeof runAudit !== "function") return "audit not loaded";
+    const r = runAudit();
+    if (!r.total) return true;
+    const first = r.screens.filter(s => s.warn.length)
+      .map(s => s.state + ":" + s.warn[0].kind).slice(0, 3).join(", ");
+    return r.total + " issue(s) — " + first;
+  });
+  qok("the audit itself honours canvas transforms", () => {
+    /* a world-space label must NOT be reported as off-canvas, or the audit
+       becomes noise and gets ignored — which is how the real ones hide */
+    const b = STATE;
+    try {
+      const r = runAudit();
+      const game = r.screens.find(s => s.state === "game");
+      return !game || !game.warn.some(w => w.kind === "OFF-CANVAS")
+        || "world-space text reported as off-canvas";
+    } finally { STATE = b; }
+  });
+
   /* ═══ 9. PRESENTATION ═══ */
   qgroup("9 · PRESENTATION");
   const screens = ["title", "select", "skins", "arsenal", "intel", "options", "dossier"];
