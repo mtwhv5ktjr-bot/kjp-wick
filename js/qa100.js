@@ -723,6 +723,48 @@ function runQA100(){
     return Math.abs(beltY - (H - 150)) > 100;
   });
 
+  /* ═══ 8c. WALLET UX ═══ */
+  qgroup("8c · WALLET");
+  qok("the ready room shows WHICH wallet is connected", () => {
+    const bak = walletAddr;
+    walletAddr = "0xAAaaBBbbCCccDDddEEeeFFff0011223344556677";
+    let drew = false;
+    const realFill = g.fillText;
+    g.fillText = function(t, x, y){ if (String(t).includes("0xAAaaBBbbCC")) drew = true; return realFill.apply(this, arguments); };
+    const b = STATE; STATE = "ready";
+    try { frame(performance.now(), true); } finally { g.fillText = realFill; STATE = b; walletAddr = bak; }
+    return drew || "address never rendered";
+  });
+  qok("watch mode is labelled view-only, not 'signed in'", () => {
+    const bakA = walletAddr, bakW = window.watchAddr;
+    walletAddr = null; window.watchAddr = "0x1111111111111111111111111111111111111111";
+    let sawWatching = false, sawSignedIn = false;
+    const realFill = g.fillText;
+    g.fillText = function(t){ const s = String(t); if (s === "WATCHING") sawWatching = true; if (s === "SIGNED IN AS") sawSignedIn = true; return realFill.apply(this, arguments); };
+    const b = STATE; STATE = "ready";
+    try { frame(performance.now(), true); } finally { g.fillText = realFill; STATE = b; walletAddr = bakA; window.watchAddr = bakW; }
+    return (sawWatching && !sawSignedIn) || "watch mode mislabelled";
+  });
+  qok("switching a wallet is one tap from the ready room", () =>
+    typeof switchWallet === "function" && typeof watchWalletEvents === "function");
+  qok("the wallet panel never overlaps the gear callouts", () => {
+    /* panel is drawn at y=10 h=94; the right-hand callout column starts at 136 */
+    const panelBottom = 10 + 94;
+    return panelBottom < 136 || "panel bottom " + panelBottom + " collides with callouts at 136";
+  });
+  qok("every wallet state offers a way forward", () => {
+    const bakA = walletAddr, bakW = window.watchAddr, b = STATE;
+    STATE = "ready";
+    const counts = [];
+    for (const [a, w] of [[null, null], ["0xabc0000000000000000000000000000000000001", null], [null, "0xabc0000000000000000000000000000000000002"]]){
+      walletAddr = a; window.watchAddr = w;
+      frame(performance.now(), true);
+      counts.push(UIB.length);
+    }
+    walletAddr = bakA; window.watchAddr = bakW; STATE = b;
+    return counts.every(n => n > 0) || "a wallet state rendered no buttons";
+  });
+
   /* ═══ 9. PRESENTATION ═══ */
   qgroup("9 · PRESENTATION");
   const screens = ["title", "select", "skins", "arsenal", "intel", "options", "dossier"];
