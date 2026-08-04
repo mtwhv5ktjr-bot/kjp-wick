@@ -99,7 +99,9 @@ for (let t = 1; t <= 8; t++) { const p = Number(await c.poolLeft(t)); poolStr.pu
 console.log("  " + (poolsOk ? "✓" : "✗") + " pools untouched " + poolStr.join("/") + " = " + poolStr.reduce((a, b) => a + b, 0));
 if (!poolsOk) bad++;
 
+/* say what is ACTUALLY true — the old wording claimed "still closed" even on an
+   open mint, which is exactly the kind of line someone trusts at 2am */
 console.log("\n" + (bad === 0
-  ? "✓ VERIFIED — this is the audited build, still closed. Safe to wire in."
+  ? "✓ VERIFIED — this is the audited build.  Mint is " + (open ? "OPEN: it is taking real PLS right now." : "CLOSED: nobody can mint yet.")
   : "✗ " + bad + " MISMATCH(ES) — DO NOT PUBLISH THIS ADDRESS.") + "\n");
 process.exit(bad ? 1 : 0);
