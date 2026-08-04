@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>KJP — KENNY JOHN PIERRE: THE BLACK FILE</title>
+<meta name="description" content="Kenny John Pierre infiltrates the Agency. Top-down stealth in the $WICK universe. See you in the courtroom.">
+<link rel="canonical" href="https://kjp.wick.pics/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="KJP">
+<meta property="og:title" content="KJP — THE BLACK FILE">
+<meta property="og:description" content="The Agency made him. He's coming for the file. Top-down stealth — $WICK universe.">
+<meta property="og:url" content="https://kjp.wick.pics/">
+<meta name="theme-color" content="#05070c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="10" fill="%2305070c"/><text x="32" y="43" font-family="Arial Black,Arial" font-weight="900" font-size="26" fill="%237cf9a5" text-anchor="middle">KJP</text><rect x="10" y="50" width="44" height="3" fill="%23d33"/></svg>'>
+<style>
+  html,body{margin:0;padding:0;background:#05070c;height:100%;overflow:hidden;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    touch-action:none;overscroll-behavior:none}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    height:100dvh;width:100vw;background:#05070c}
+  canvas{display:block;background:#05070c;image-rendering:auto}
+  /* portrait phones: the game is landscape — same pattern as games.wick.pics */
+  #rot{position:fixed;inset:0;z-index:40;display:none;flex-direction:column;gap:14px;
+    align-items:center;justify-content:center;background:#05070c;color:#cfe3d2;
+    font:15px/1.5 Verdana,sans-serif;text-align:center;padding:24px}
+  #rot .ph{font-size:44px;animation:rot 1.6s ease-in-out infinite}
+  @keyframes rot{0%,20%{transform:rotate(0)}55%,100%{transform:rotate(90deg)}}
+  @media (orientation:portrait) and (pointer:coarse){ #rot{display:flex} }
+  /* wallet address sheet — prompt() is blocked in TG/IG webviews */
+  #wsheet{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+    background:rgba(3,5,9,.82)}
+  #wsheet.on{display:flex}
+  #wsheet .card{background:#0b1118;border:1px solid #23425f;border-radius:12px;padding:18px 16px;
+    width:min(440px,92vw);color:#cfe3d2;font:13px/1.5 Verdana,sans-serif}
+  #wsheet h3{margin:0 0 6px;font:800 15px Verdana;color:#7cf9a5;letter-spacing:1px}
+  #wsheet input{width:100%;box-sizing:border-box;background:#060a10;border:1px solid #2c4a68;color:#e6f1ff;
+    border-radius:8px;padding:11px 10px;font:13px monospace;margin:10px 0 8px}
+  #wsheet .row{display:flex;gap:8px;margin-top:8px}
+  #wsheet button{flex:1;background:#153b26;border:1px solid #2f7a4d;color:#baf7cf;border-radius:8px;
+    padding:11px 0;font:700 13px Verdana;cursor:pointer}
+  #wsheet button.alt{background:#131a24;border-color:#31465e;color:#9db4cc}
+  #wsMsg{min-height:16px;font-size:11px;color:#9db4cc}
+  #wsMsg.bad{color:#ff7d7d}
+</style>
+</head><body>
+<div id="wrap"><canvas id="cv" width="1280" height="720"></canvas></div>
+<div id="rot"><div class="ph">📱</div><div id="rotTxt">Rotate to <b>landscape</b><br>to play <b>KJP</b></div></div>
+<div id="wsheet"><div class="card">
+  <h3>WATCH A WALLET</h3>
+  <div>Paste any PulseChain address — unlocks your WICK ARSENAL guns with no wallet app (view-only; connecting is still needed to submit scores).</div>
+  <input id="wsIn" placeholder="0x…" autocomplete="off" spellcheck="false">
+  <div id="wsMsg"></div>
+  <div class="row"><button id="wsGo">UNLOCK</button><button class="alt" id="wsX">CLOSE</button></div>
+</div></div>
+<script src="js/core.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/world.js"></script>
+<script src="js/ents.js"></script>
+<script src="js/render.js"></script>
+<script src="js/screens.js"></script>
+<script src="js/net.js"></script>
+<script src="js/qa.js"></script>
+<script src="js/main.js"></script>
+</body></html>
