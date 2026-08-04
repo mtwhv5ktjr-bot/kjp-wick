@@ -713,13 +713,16 @@ function conePoly(e, range, fov, steps){
 }
 /* cone tint draws ABOVE the darkness (crisp intel overlay, MGS-style);
    the light-punch into LM happens separately in the world pass. */
-function drawConeTint(e, pts, range, fov, tint, edge){
+function drawConeTint(e, pts, range, fov, tint, edge, state){
   const gr = g.createRadialGradient(e.x, e.y, 6, e.x, e.y, range);
   gr.addColorStop(0, tint[0]); gr.addColorStop(0.75, tint[1]); gr.addColorStop(1, "rgba(0,0,0,0)");
-  g.fillStyle = gr;
   g.beginPath(); g.moveTo(e.x, e.y);
   for (const [px, py] of pts) g.lineTo(px, py);
-  g.closePath(); g.fill();
+  g.closePath();
+  g.fillStyle = gr; g.fill();
+  /* colourblind mode: state also encoded as hatch DIRECTION, not just hue */
+  const pat = conePattern(state);
+  if (pat){ g.save(); g.clip(); g.fillStyle = pat; g.fillRect(e.x - range, e.y - range, range * 2, range * 2); g.restore(); }
   g.strokeStyle = edge; g.lineWidth = 1; g.stroke();
   const bandR = (performance.now() / 900 + e.x * 0.01) % 1 * range;
   g.save(); g.clip();
@@ -768,7 +771,11 @@ function drawGame(){
   const lookY = clamp((MOUSE.y - H / 2) * 0.18, -70, 70);
   camX = clamp(P.x - W / 2 + (IS_TOUCH ? 0 : lookX), 0, Math.max(0, LV.w * T - W));
   camY = clamp(P.y - H / 2 + (IS_TOUCH ? 0 : lookY), 0, Math.max(0, LV.h * T - H));
-  if (shakeT > 0){ shakeT -= 1 / 60; camX += (rnd() - 0.5) * shakeAmp * 2; camY += (rnd() - 0.5) * shakeAmp * 2; if (shakeT <= 0) shakeAmp = 0; }
+  if (shakeT > 0){
+    const k = OPT.shake ? 2 : 0;                 // vestibular comfort: a real OFF
+    shakeT -= 1 / 60; camX += (rnd() - 0.5) * shakeAmp * k; camY += (rnd() - 0.5) * shakeAmp * k;
+    if (shakeT <= 0) shakeAmp = 0;
+  }
 
   /* reset light layers */
   lmg.setTransform(1, 0, 0, 1, 0, 0);
@@ -973,7 +980,8 @@ function drawGame(){
     const pts = conePoly(e, range, e.fov, 20);
     lmCone(e, range, e.fov, pts);
     const [f, s] = coneColors(e);
-    coneTints.push({ e, pts, range, fov: e.fov, f, s });
+    const st = (e.st === "alert" || e.detect >= 1) ? "alert" : (e.st === "susp" || e.detect > 0.45) ? "susp" : "calm";
+    coneTints.push({ e, pts, range, fov: e.fov, f, s, st });
   }
   for (const e of LV.cams){
     if (e.dead) continue;
@@ -982,7 +990,7 @@ function drawGame(){
     lmCone(e, e.range, 0.55, pts);
     coneTints.push({ e, pts, range: e.range, fov: 0.55,
       f: e.detect > 0.4 ? ["rgba(255,70,70,0.18)", "rgba(255,60,60,0.08)"] : ["rgba(120,180,255,0.13)", "rgba(110,170,255,0.06)"],
-      s: "rgba(140,190,255,0.25)" });
+      s: "rgba(140,190,255,0.25)", st: e.detect > 0.4 ? "alert" : "calm" });
   }
   for (const e of LV.dogs){
     if (down(e)) continue;
@@ -1095,7 +1103,7 @@ function drawGame(){
 
   /* cone tints above the dark — crisp, state-colored, always readable */
   g.save(); g.translate(-Math.round(camX), -Math.round(camY));
-  for (const ct of coneTints) drawConeTint(ct.e, ct.pts, ct.range, ct.fov, ct.f, ct.s);
+  for (const ct of coneTints) drawConeTint(ct.e, ct.pts, ct.range, ct.fov, ct.f, ct.s, ct.st);
   g.restore();
 
   drawWeather();
@@ -1378,7 +1386,25 @@ function drawHUD(){
     g.textAlign = "left";
   }
   drawRadar();
+  drawFocusMeter();
+  drawDamageArrow();
+  drawTutorial();
   if (IS_TOUCH) drawTouchUI();
+}
+/* WHERE did that come from — a rim arc at the edge of the screen, decaying.
+   Without it, top-down combat is just being hurt by the room. */
+function drawDamageArrow(){
+  if (!P.hurtFrom) return;
+  P.hurtFrom.t -= 1 / 60;
+  if (P.hurtFrom.t <= 0){ P.hurtFrom = null; return; }
+  const a = P.hurtFrom.a, k = Math.min(1, P.hurtFrom.t / 1.4);
+  g.save(); g.translate(W / 2, H / 2); g.rotate(a);
+  const r = Math.min(W, H) * 0.42;
+  const gr = g.createRadialGradient(0, 0, r * 0.7, 0, 0, r * 1.25);
+  gr.addColorStop(0, "rgba(255,60,60,0)"); gr.addColorStop(1, "rgba(255,60,60," + (0.5 * k) + ")");
+  g.fillStyle = gr;
+  g.beginPath(); g.arc(0, 0, r * 1.25, -0.5, 0.5); g.arc(0, 0, r * 0.7, 0.5, -0.5, true); g.closePath(); g.fill();
+  g.restore();
 }
 function heartPath(x, y, r){
   g.beginPath();
@@ -1532,5 +1558,15 @@ function drawPost(){
   }
   if (P && P.hurtT > 0){
     g.fillStyle = `rgba(200,30,40,${P.hurtT * 0.5})`; g.fillRect(0, 0, W, H);
+  }
+  /* FOCUS grade: the world goes cold and quiet while you think */
+  if (typeof focusOn !== "undefined" && focusOn){
+    g.globalCompositeOperation = "saturation";
+    g.fillStyle = "hsl(0,20%,50%)"; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "source-over";
+    g.fillStyle = "rgba(90,140,210,0.10)"; g.fillRect(0, 0, W, H);
+    const e = g.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.7);
+    e.addColorStop(0, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(10,20,40,0.4)");
+    g.fillStyle = e; g.fillRect(0, 0, W, H);
   }
 }

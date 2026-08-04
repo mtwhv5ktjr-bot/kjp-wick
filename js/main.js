@@ -11,8 +11,11 @@ function startLevel(n){
   rainDrops = null;
   introT = 2.6;
   LV.stats.spotted = 0;
+  focusT = 1;
   STATE = "game";
   musicWant(LV.alert === 2 ? "combat" : LV.alert === 1 ? "caution" : "calm");
+  if (audioArmed) ambStart(LV.def.theme);        // the room, per district
+  tutStart();
 }
 
 /* first gesture births the AudioContext (autoplay policy) */
@@ -20,7 +23,8 @@ let audioArmed = false;
 function armAudio(){
   if (audioArmed) return;
   audioArmed = true;
-  try{ ac(); musicInit(); }catch(e){}
+  try{ ac(); audioBuses(); musicInit(); applyAudioOpts();
+       if (LV && STATE === "game") ambStart(LV.def.theme); }catch(e){}
 }
 addEventListener("pointerdown", armAudio, { once: false });
 addEventListener("keydown", armAudio, { once: false });
@@ -34,7 +38,10 @@ function gameUpdate(dt){
   }
   if (PRESS.has("Escape")){ STATE = "pause"; SFX.ui2(); return; }
   if (BOT) botUpdate(dt);
-  entsUpdate(dt);
+  /* FOCUS slows the SIMULATION, never the input read — planning stays crisp */
+  const scale = focusScale(dt);
+  entsUpdate(dt * scale);
+  tutUpdate(dt);
 }
 function drawIntroCard(){
   if (introT <= 0) return;
@@ -66,11 +73,14 @@ function frame(now, syncOnly){
   else if (STATE === "skins") drawSkins();
   else if (STATE === "arsenal") drawArsenal();
   else if (STATE === "intel") drawIntel();
+  else if (STATE === "options") drawOptions();
+  else if (STATE === "dossier") drawDossier();
   else if (STATE === "brief") drawBrief(dt);
   else if (STATE === "debrief") drawDebrief(dt);
   else if (STATE === "dead") drawDead();
   else if (STATE === "credits") drawCredits(dt);
   else if (STATE === "qa") drawQA();
+  else if (STATE === "qa100") drawQA100();
 
   dtAvg = dtAvg * 0.95 + (performance.now() - t0) * 0.05;
   if (location.search.includes("perf")){
@@ -88,7 +98,8 @@ reconcileSkin();
 (function boot(){
   const q = location.search;
   const botN = (/[?&]bot=(\d)/.exec(q) || [])[1];
-  if (/[?&]qa=1/.test(q)){ runQA(); STATE = "qa"; }
+  if (/[?&]qa100=1/.test(q)){ runQA100(); STATE = "qa100"; }
+  else if (/[?&]qa=1/.test(q)){ runQA(); STATE = "qa"; }
   else if (botN){ startBot(+botN); }
   requestAnimationFrame(t => { lastT = t; frame(t); });
 })();

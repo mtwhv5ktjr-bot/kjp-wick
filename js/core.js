@@ -124,6 +124,9 @@ function ac(){
   return AC;
 }
 function env(gn, t0, a, d, v){ gn.gain.setValueAtTime(0, t0); gn.gain.linearRampToValueAtTime(v, t0 + a); gn.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d); }
+/* every one-shot lands on the SFX bus (see audio2.js) so a single gain node
+   mutes the whole game — falls back to destination before the buses exist */
+function sfxOut(c){ return (typeof BUS !== "undefined" && BUS.sfx) ? BUS.sfx : c.destination; }
 function tone(f, dur, type, vol, slide, when){
   try{
     const c = ac(), t0 = (when || c.currentTime);
@@ -131,22 +134,23 @@ function tone(f, dur, type, vol, slide, when){
     o.type = type || "sine"; o.frequency.setValueAtTime(f, t0);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, f + slide), t0 + dur);
     env(gn, t0, 0.004, dur, vol || 0.16);
-    o.connect(gn).connect(c.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    o.connect(gn).connect(sfxOut(c)); o.start(t0); o.stop(t0 + dur + 0.05);
   }catch(e){}
 }
 function hiss(dur, vol, lp, when){
   try{
     const c = ac(), t0 = (when || c.currentTime);
-    const n = c.createBufferSource(), b = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+    const n = c.createBufferSource(), b = c.createBuffer(1, Math.max(1, Math.floor(c.sampleRate * dur)), c.sampleRate);
     const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     n.buffer = b;
     const f = c.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp || 2400;
     const gn = c.createGain(); env(gn, t0, 0.003, dur, vol || 0.12);
-    n.connect(f).connect(gn).connect(c.destination); n.start(t0);
+    n.connect(f).connect(gn).connect(sfxOut(c)); n.start(t0);
   }catch(e){}
 }
 const SFX = {
-  step(run){ hiss(0.045, run ? 0.045 : 0.022, 700); },
+  /* surface-aware once audio2 is loaded; the flat hiss is the fallback */
+  step(run, sneak){ if (typeof stepSound === "function" && LV) stepSound(run, sneak); else hiss(0.045, run ? 0.045 : 0.022, 700); },
   knock(){ tone(190, 0.09, "square", 0.1); tone(150, 0.1, "square", 0.08); },
   dart(){ hiss(0.08, 0.1, 3600); tone(1300, 0.05, "sine", 0.04, -700); },
   silenced(){ hiss(0.07, 0.16, 2200); tone(240, 0.05, "triangle", 0.08, -120); },
@@ -181,9 +185,11 @@ const SFX = {
 function musicInit(){
   if (MUSIC.mode !== "off") return;
   const c = ac();
+  const out = (typeof audioBuses === "function") ? audioBuses().music : c.destination;
   for (const k of ["calm", "caution", "combat"]){
-    const gn = c.createGain(); gn.gain.value = k === "calm" ? 0.5 : 0; gn.connect(c.destination); MUSIC.gain[k] = gn;
+    const gn = c.createGain(); gn.gain.value = k === "calm" ? 0.5 : 0; gn.connect(out); MUSIC.gain[k] = gn;
   }
+  if (typeof applyAudioOpts === "function") applyAudioOpts();
   MUSIC.mode = "on"; MUSIC.next = c.currentTime + 0.05; MUSIC.step = 0;
   MUSIC.timer = setInterval(musicTick, 40);
 }
@@ -384,7 +390,13 @@ function wSpec(id){
 
 /* score constants — campaign total must stay far below the shared board's
    300k ceiling for mode "kjp": 6 levels x ~20k max ≈ 120k. Headroom is safety. */
-const SC = { clear: 4000, timeMax: 4000, ghost: 5000, pacifist: 2500, intel: 700, alarm: -800, kill: -150, civilian: -500 };
+const SC = { clear: 4000, timeMax: 4000, ghost: 5000, pacifist: 2500, intel: 700, alarm: -800, kill: -150, civilian: -500,
+  /* HARD PER-OP CEILING. The shared board rejects anything over 300,000 for
+     mode "kjp", and the multipliers stack: GOLD BRIEFCASE (×1.25, doubled
+     intel) on BABA YAGA (×1.6) pushed a perfect six-op campaign to ~320k —
+     a flawless run would have been refused by the server. 45k × 6 = 270k
+     leaves real headroom for anything added later. */
+  opMax: 45000 };
 function rankFor(r){
   if (r.ghost && r.pacifist) return "BABA YAGA";
   if (r.ghost) return "GHOST";

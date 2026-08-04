@@ -199,14 +199,22 @@ function drawTitle(){
   g.fillText("CLASSIFIED // KJP-ORIGIN // EYES ONLY", 20, 17);
   g.textAlign = "right"; g.fillText("kjp-game.wick.pics", W - 20, 17); g.textAlign = "left";
   /* menu */
-  const bx = 74, by = 392, bw = 300, bh = 46, gap = 12;
+  const bx = 74, by = 392, bw = 300, bh = 42, gap = 9;
   btn(bx, by, bw, bh, "▶ INFILTRATE", () => { STATE = "select"; });
-  btn(bx, by + (bh + gap), bw, bh, "🎭 SKINS", () => { STATE = "skins"; });
-  btn(bx, by + 2 * (bh + gap), bw, bh, "🔫 ARSENAL", () => { STATE = "arsenal"; });
-  btn(bx, by + 3 * (bh + gap), bw, bh, "📼 INTEL / HOW TO PLAY", () => { STATE = "intel"; });
+  btn(bx, by + (bh + gap), bw / 2 - 5, bh, "🎭 SKINS", () => { STATE = "skins"; }, { fs: 13 });
+  btn(bx + bw / 2 + 5, by + (bh + gap), bw / 2 - 5, bh, "🔫 ARSENAL", () => { STATE = "arsenal"; }, { fs: 13 });
+  btn(bx, by + 2 * (bh + gap), bw / 2 - 5, bh, "🎖 DOSSIER", () => { STATE = "dossier"; }, { fs: 13 });
+  btn(bx + bw / 2 + 5, by + 2 * (bh + gap), bw / 2 - 5, bh, "⚙ OPTIONS", () => { STATE = "options"; }, { fs: 13 });
+  btn(bx, by + 3 * (bh + gap), bw, bh, "📼 INTEL / HOW TO PLAY", () => { STATE = "intel"; }, { fs: 13 });
+  /* difficulty is a first-class fact on the front page, not a buried setting */
+  const d = diff();
+  g.font = "900 11px Arial Black"; g.fillStyle = "#ffd27c";
+  g.fillText("DIFFICULTY: " + d.name, bx, by + 4 * (bh + gap) + 8);
+  g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
+  g.fillText("score ×" + d.scoreMul + " · " + d.blurb, bx + 150, by + 4 * (bh + gap) + 8);
   /* wallet line */
-  g.font = "700 12px Verdana"; g.fillStyle = walletAddr ? "#7cf9a5" : "#7c8ba3";
-  g.fillText(walletStatus || (walletAddr ? "connected" : "wallet: not connected — ARSENAL menu to link your WICK guns"), bx, by + 4 * (bh + gap) + 12);
+  g.font = "700 11px Verdana"; g.fillStyle = walletAddr ? "#7cf9a5" : "#7c8ba3";
+  g.fillText(walletStatus || (walletAddr ? "connected" : "wallet: not connected — ARSENAL to link your WICK guns + gear"), bx, by + 4 * (bh + gap) + 26);
   /* board */
   drawTitleBoard();
   g.font = "700 11px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
@@ -260,11 +268,20 @@ function drawSelect(){
       g.font = "900 15px Arial Black"; g.fillStyle = "#404b58";
       g.fillText("🔒 CLEAR OP " + (i - 1), x + 18, y + 126);
     } else if (best){
-      stampRank(x + cw - 84, y + 116, rankFor(best), 0.62, -0.12);
+      stampRank(x + cw - 84, y + 112, rankFor(best), 0.62, -0.12);
       g.font = "700 12px Verdana"; g.fillStyle = "#9db4cc";
-      g.fillText("best " + best.score.toLocaleString() + " pts", x + 18, y + 120);
-      g.fillText(fmtTime(best.time) + " · intel " + best.intel, x + 18, y + 140);
-      if (best.ghost){ g.fillStyle = "#7cf9a5"; g.fillText("👻 ghosted", x + 18, y + 160); }
+      g.fillText("best " + best.score.toLocaleString() + " pts", x + 18, y + 118);
+      g.fillText(fmtTime(best.time) + " · intel " + best.intel + "/" + (best.intelMax || "?"), x + 18, y + 136);
+      /* ribbon strip — what's still unclaimed in a level you "finished" */
+      ribbonsFor(i).forEach((rb, k) => {
+        const rx = x + 18 + k * 22, ry = y + 152;
+        g.fillStyle = rb.done ? "#ffd27c" : "rgba(120,140,160,0.22)";
+        g.fillRect(rx, ry, 16, 5);
+        if (rb.done){ g.fillStyle = "rgba(255,255,255,0.35)"; g.fillRect(rx, ry, 16, 2); }
+      });
+      g.font = "700 9px Verdana"; g.fillStyle = "#57717f";
+      const got = ribbonsFor(i).filter(r => r.done).length;
+      g.fillText(got + "/" + CHALLENGES.length + " ribbons", x + 18 + CHALLENGES.length * 22 + 8, y + 157);
     } else {
       g.font = "700 12px Verdana"; g.fillStyle = "#9db4cc";
       g.fillText("no clear yet", x + 18, y + 126);
@@ -395,7 +412,11 @@ function computeResult(){
   if (pacifist) score += SC.pacifist;
   score = Math.max(500, score);
   if (gold) score = Math.round(score * 1.25);
-  const res = { score, time: LV.time, ghost, pacifist, combat: s.combats > 0, kills: s.kills, kos: s.kos, intel: s.intel, alarms: s.alarms };
+  score = Math.round(score * diff().scoreMul);                // the board pays for pressure
+  score = Math.min(score, SC.opMax);                          // never outgrow the board's ceiling
+  const res = { score, time: LV.time, ghost, pacifist, combat: s.combats > 0, kills: s.kills, kos: s.kos,
+                intel: s.intel, intelMax: LV.picks.filter(q => q.k === "intel").length,
+                alarms: s.alarms, diff: OPT.diff };
   res.rank = rankFor(res);
   return res;
 }
@@ -403,10 +424,20 @@ function finishLevel(){
   const r = computeResult();
   const old = PROG.lv[LV.n];
   if (!old || r.score > old.score) PROG.lv[LV.n] = r;
-  else { // keep best score but remember any new ghost achievement for skin gates
-    if (r.ghost && !old.ghost) old.ghost = true;
-    if (r.pacifist && !old.pacifist) old.pacifist = true;
+  else { /* keep the best score, but a ribbon earned is a ribbon KEPT — an
+            S-rank run should never erase the pacifist badge from a slower one */
+    if (r.ghost) old.ghost = true;
+    if (r.pacifist) old.pacifist = true;
+    if (r.alarms === 0) old.alarms = 0;
+    if (r.time < (old.time || 1e9)) old.time = r.time;
+    old.intelMax = r.intelMax;
+    if (r.intel > (old.intel || 0)) old.intel = r.intel;
   }
+  /* lifetime career tallies for the DOSSIER */
+  const c = PROG.career = PROG.career || {};
+  c.runs = (c.runs || 0) + 1; c.kos = (c.kos || 0) + r.kos; c.kills = (c.kills || 0) + r.kills;
+  c.intel = (c.intel || 0) + r.intel; c.alarms = (c.alarms || 0) + r.alarms;
+  c.time = (c.time || 0) + r.time;
   saveProg();
   DB = { n: LV.n, r, t: 0, stampT: 0 };
   STATE = "debrief"; musicWant("calm");
@@ -721,6 +752,83 @@ function drawIntel(){
   g.fillText("KJP — a $WICK universe game on kjp-game.wick.pics · sister ops: games.wick.pics (PEPE WICK) · mint.wick.pics (WICK ARSENAL NFTs)", L, y + 14);
   g.fillText("counsel's retainer (unchanged from the old kjp-game.wick.pics): 0x3848D41D6f439Ca645e9193c7680629A86B739ED", L, y + 32);
   btn(W - 190, H - 78, 120, 40, "← BACK", () => { STATE = "title"; });
+  dispatchClicks();
+}
+
+/* ---------- ITERATION 8: THE DOSSIER — a career, not a high score ----------
+   Per-op challenge ribbons give a reason to walk back into a level you already
+   cleared, and the lifetime tallies quietly tell you what kind of operative you
+   turned out to be. Nothing here is busywork: every ribbon is a different way
+   to play the same building. */
+const CHALLENGES = [
+  { k: "ghost",    name: "GHOST",      d: "clear without ever being spotted",  has: r => r && r.ghost },
+  { k: "pacifist", name: "PACIFIST",   d: "clear without killing anyone",      has: r => r && r.pacifist },
+  { k: "silent",   name: "NO ALARMS",  d: "clear with zero alarms raised",     has: r => r && r.alarms === 0 },
+  { k: "swift",    name: "SWIFT",      d: "clear inside par time",             has: (r, n) => r && r.time <= LEVELS[n].par },
+  { k: "archivist",name: "ARCHIVIST",  d: "collect every exhibit in the op",   has: (r, n) => r && r.intel >= r.intelMax }
+];
+function ribbonsFor(n){
+  const r = PROG.lv[n];
+  return CHALLENGES.map(c => ({ c, done: !!(r && c.has(r, n)) }));
+}
+function ribbonTotal(){
+  let d = 0, t = 0;
+  for (let n = 1; n <= 6; n++) for (const r of ribbonsFor(n)){ t++; if (r.done) d++; }
+  return [d, t];
+}
+function drawDossier(){
+  UIB = [];
+  g.fillStyle = "#05070c"; g.fillRect(0, 0, W, H);
+  g.font = "900 34px Arial Black"; g.fillStyle = "#e6f1ff"; g.fillText("DOSSIER", 70, 78);
+  const [rd, rt] = ribbonTotal();
+  g.font = "700 12px Verdana"; g.fillStyle = "#7c8ba3";
+  g.fillText("K.J.P. — service record · " + rd + "/" + rt + " ribbons · " + clearedCount() + "/6 ops cleared", 70, 100);
+
+  /* lifetime tallies */
+  const S = PROG.career || {};
+  const tallies = [
+    ["OPS RUN", S.runs || 0], ["OPS CLEARED", clearedCount()],
+    ["SLEEPERS", S.kos || 0], ["KILLS", S.kills || 0],
+    ["EXHIBITS", S.intel || 0], ["ALARMS", S.alarms || 0],
+    ["TIME IN THE BUILDING", fmtTime(S.time || 0)], ["CAMPAIGN", campaignScore().toLocaleString() + " pts"]
+  ];
+  tallies.forEach(([k, v], i) => {
+    const x = 70 + (i % 4) * 232, y = 132 + (i / 4 | 0) * 70;
+    g.fillStyle = "rgba(9,14,18,0.85)"; g.fillRect(x, y, 216, 56);
+    g.strokeStyle = "#243040"; g.lineWidth = 1.5; g.strokeRect(x + 1, y + 1, 214, 54);
+    g.font = "900 9px Arial Black"; g.fillStyle = "#57717f"; g.fillText(k, x + 12, y + 19);
+    g.font = "900 20px Arial Black"; g.fillStyle = "#e6f1ff"; g.fillText(String(v), x + 12, y + 44);
+  });
+  /* per-op ribbon grid */
+  g.font = "900 14px Arial Black"; g.fillStyle = "#9fd7b0"; g.fillText("CHALLENGE RIBBONS", 70, 300);
+  g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
+  g.fillText("each ribbon is a different way through the same building — they stack with your best score", 70, 316);
+  for (let n = 1; n <= 6; n++){
+    const y = 336 + (n - 1) * 58;
+    const open = n === 1 || !!PROG.lv[n - 1];
+    g.font = "900 12px Arial Black"; g.fillStyle = open ? "#cfe3d2" : "#3d4854";
+    g.fillText("OP " + n, 70, y + 20);
+    g.font = "700 11px Verdana"; g.fillStyle = open ? "#8ba3b8" : "#3d4854";
+    g.fillText(LEVELS[n].name, 122, y + 20);
+    ribbonsFor(n).forEach((rb, i) => {
+      const x = 300 + i * 132;
+      g.fillStyle = rb.done ? "rgba(48,32,10,0.95)" : "rgba(9,14,18,0.7)";
+      g.fillRect(x, y, 124, 34);
+      g.strokeStyle = rb.done ? "#ffd27c" : "#243040"; g.lineWidth = rb.done ? 2 : 1;
+      g.strokeRect(x + 0.5, y + 0.5, 123, 33);
+      g.font = "900 10px Arial Black"; g.fillStyle = rb.done ? "#ffd27c" : "#4e5c68";
+      g.fillText((rb.done ? "★ " : "") + rb.c.name, x + 8, y + 15);
+      g.font = "700 7px Verdana"; g.fillStyle = rb.done ? "#a8b8a0" : "#3d4854";
+      g.fillText(rb.c.d.slice(0, 30), x + 8, y + 27);
+    });
+    const best = PROG.lv[n];
+    if (best){
+      g.font = "700 10px Verdana"; g.fillStyle = "#7c8ba3"; g.textAlign = "right";
+      g.fillText(best.score.toLocaleString() + " pts · " + rankFor(best), W - 74, y + 21);
+      g.textAlign = "left";
+    }
+  }
+  btn(W - 190, H - 62, 120, 40, "← BACK", () => { STATE = "title"; });
   dispatchClicks();
 }
 

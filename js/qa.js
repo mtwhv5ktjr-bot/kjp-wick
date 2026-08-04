@@ -179,6 +179,7 @@ window.KJP = {
   state: () => ({ state: STATE, lv: LV && LV.n, alert: LV && LV.alert, hp: P && P.hp, score: LV && computeResult().score }),
   bot: n => startBot(n || (LV ? LV.n : 1)),
   qa: () => { runQA(); STATE = "qa"; },
+  qa100: () => { const r = runQA100(); STATE = "qa100"; return r; },
   shot: async () => {                       // hidden pane pauses rAF — render synchronously first
     frame(performance.now(), true);
     await fetch("/shot", { method: "POST", body: cv.toDataURL() });

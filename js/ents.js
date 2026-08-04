@@ -17,7 +17,8 @@ function initEnts(){
   srand(LV.n * 7777 + 13);
   P = {
     isPlayer: true, x: LV.spawn.x * T + T / 2, y: LV.spawn.y * T + T / 2, ang: -Math.PI / 2,
-    hpMax: 3 + (hasHolo() ? 1 : 0) + (hasGear(2) ? 1 : 0), hp: 3 + (hasHolo() ? 1 : 0) + (hasGear(2) ? 1 : 0),
+    hpMax: Math.max(1, 3 + (hasHolo() ? 1 : 0) + (hasGear(2) ? 1 : 0) + diff().hp),
+    hp: Math.max(1, 3 + (hasHolo() ? 1 : 0) + (hasGear(2) ? 1 : 0) + diff().hp),
     plate: hasGear(2),                       // KEVLAR WEAVE: eats the first hit of the op
     sneak: false, moving: 0, stepT: 0, dead: false,
     weapons: ["fists", "tranq"], wi: 1, fireT: 0, reloadT: 0,
@@ -106,7 +107,7 @@ function seesPlayer(e, range, fov, ignoreLight){
   if (P.dead) return 0;
   const d = dist(e.x, e.y, P.x, P.y);
   const lightMul = ignoreLight ? 1 : (0.62 + 0.5 * (P.litF == null ? 1 : P.litF));
-  const R = range * (skinDef().detectMul || 1) * (P.sneak ? 0.62 : 1) * lightMul;
+  const R = range * (skinDef().detectMul || 1) * (P.sneak ? 0.62 : 1) * lightMul * diff().detect;
   if (d > R) return 0;
   if (Math.abs(angDiff(e.ang, angTo(e.x, e.y, P.x, P.y))) > fov / 2) return 0;
   if (!los(e.x, e.y, P.x, P.y, true, P.sneak)) return 0;
@@ -135,7 +136,7 @@ function goCombat(fromX, fromY){
 function bodyAlarm(x, y, label){
   LV.stats.alarms++;
   toast(label || "🚨 BODY REPORTED — QRF INBOUND", "#ff5b5b");
-  SFX.alarm();
+  STING.alarm();
   goCombat(x, y);
   LV.alertT = 20;                                  // a reported incident doesn't cool in 12s
   if (!LV.def.exfil && (LV.bodyWaves || 0) < 2 && (LV.def.spawnPts || []).length){
@@ -157,6 +158,7 @@ function reinforce(nMax){
     LV.guards.push(gg);
     fxRing(gg.x, gg.y, "#ff5b5b");
   }
+  STING.qrf(); shake(5);
   toast("⚠ REINFORCEMENTS ON SITE", "#ff8f8f");
 }
 
@@ -169,7 +171,10 @@ function playerUpdate(dt){
   if (P.kd > 0){ P.kd -= dt; return; }
 
   /* stance + move intent (keyboard or touch stick) */
-  P.sneak = KEYS.has("ControlLeft") || KEYS.has("KeyC") || TOUCH.sneakTgl;
+  /* HOLD or TOGGLE, the player's call (OPTIONS) */
+  if (OPT.sneakHold) P.sneak = KEYS.has("ControlLeft") || KEYS.has("KeyC") || TOUCH.sneakTgl;
+  else { if (PRESS.has("KeyC") || PRESS.has("ControlLeft")) P.sneakTgl = !P.sneakTgl;
+         P.sneak = P.sneakTgl || TOUCH.sneakTgl; }
   P.runHeld = KEYS.has("ShiftLeft") || KEYS.has("ShiftRight") || TOUCH.run;
   let mx = (KEYS.has("KeyD") || KEYS.has("ArrowRight") ? 1 : 0) - (KEYS.has("KeyA") || KEYS.has("ArrowLeft") ? 1 : 0);
   let my = (KEYS.has("KeyS") || KEYS.has("ArrowDown") ? 1 : 0) - (KEYS.has("KeyW") || KEYS.has("ArrowUp") ? 1 : 0);
@@ -189,9 +194,10 @@ function playerUpdate(dt){
     P.stepT -= dt * (P.runHeld ? 1.7 : 1);
     if (P.stepT <= 0){
       P.stepT = 0.3;
-      SFX.step(P.runHeld);
+      SFX.step(P.runHeld, P.sneak);
       const soft = hasGear(3) ? 0.75 : 1;                 // BOOTS: run 25% quieter
-      if (!P.sneak) addNoise(P.x, P.y, (P.runHeld ? 165 : 55) * soft, "step");
+      const surf = SURF_NOISE[surfaceOf(P.x, P.y)] || 1;  // marble sings, carpet forgives
+      if (!P.sneak) addNoise(P.x, P.y, (P.runHeld ? 165 : 55) * soft * surf, "step");
     }
   }
   /* vents force a crouch — you crawl in a duct, you don't jog */
@@ -205,7 +211,7 @@ function playerUpdate(dt){
   } else if (!IS_TOUCH || MOUSE.moved > 4){
     P.ang = angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
   }
-  if (IS_TOUCH){
+  if (OPT.aimAssist && (IS_TOUCH || focusOn)){
     let best = null, bd = 0.24;
     for (const e of LV.guards.concat(LV.dogs)) if (!down(e)){
       const dd = Math.abs(angDiff(P.ang, angTo(P.x, P.y, e.x, e.y)));
@@ -245,7 +251,7 @@ function playerUpdate(dt){
       const a = angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
       const reach = Math.min(300, aimD, ray(P.x, P.y, a, 300) - 10);
       LV.coins.push({ x: P.x, y: P.y, vx: Math.cos(a) * reach / 0.55, vy: Math.sin(a) * reach / 0.55, t: 0.55, spin: 0 });
-      SFX.ui();
+      SFX.ui(); tutCoinThrown();
     }
   }
   P.litF = lightFactorAt(P.x, P.y);
@@ -370,7 +376,7 @@ function _interactions(dt){
       if ((LV.time * 10 | 0) % 2 === 0) SFX.hackTick();
       if (t.prog >= 1){
         t.done = true; LV.hacks++;
-        SFX.unlock(); toast("TERMINAL CRACKED (" + LV.hacks + "/" + (LV.def.hacksNeed || 0) + ")", "#7cf9a5");
+        STING.objective(); toast("TERMINAL CRACKED (" + LV.hacks + "/" + (LV.def.hacksNeed || 0) + ")", "#7cf9a5");
         if (LV.def.hackKillsCams){ for (const c of LV.cams) c.dead = true; toast("cameras are BLIND", "#7cf9a5"); }
         if (LV.hacks >= (LV.def.hacksNeed || 0) && LV.def.hacksNeed) toast("the CAGE is open", "#ffd27c");
       }
@@ -478,7 +484,7 @@ function _exitCheck(dt){
   }
   if (objsDone && onExit) LV.over = "win";
 }
-function playerHit(dmg){
+function playerHit(dmg, fromX, fromY){
   if (P.dead || LV.over || P.god) return;
   if (P.plate){                                   // KEVLAR WEAVE eats one hit, loudly
     P.plate = false; P.hurtT = 0.3; shake(5); SFX.hit();
@@ -486,9 +492,12 @@ function playerHit(dmg){
     fxRing(P.x, P.y, "#9fd7b0");
     return;
   }
-  P.hp -= dmg; P.hurtT = 0.4; shake(6); SFX.hurt();
-  fxBlood(P.x, P.y, 6, "#7cf9a5");
-  if (P.hp <= 0){ P.dead = true; LV.over = "dead"; musicWant("calm"); }
+  P.hp -= dmg * diff().dmg;
+  P.hurtT = 0.4; shake(6); SFX.hurt();
+  /* which way did that come from — the single most useful combat readout */
+  if (fromX != null) P.hurtFrom = { a: angTo(P.x, P.y, fromX, fromY), t: 1.4 };
+  if (OPT.gore) fxBlood(P.x, P.y, 6, "#7cf9a5");
+  if (P.hp <= 0){ P.dead = true; LV.over = "dead"; musicWant("calm"); STING.fail(); }
 }
 
 /* ---------- guards ---------- */
@@ -540,11 +549,22 @@ function guardUpdate(e, dt){
 
   /* --- state transitions --- */
   if (e.detect >= 1 && e.st !== "alert"){
-    e.st = "alert"; e.pop = "!"; e.popT = 1; SFX.spot();
+    e.st = "alert"; e.pop = "!"; e.popT = 1; STING.spotted();
     LV.stats.spotted = (LV.stats.spotted || 0) + 1;        // GHOST rank dies here
-    e.radioT = e.radioBase * (skinDef().radioMul || 1);
+    e.radioT = e.radioBase * (skinDef().radioMul || 1) * diff().radio;
     e.bodyRadio = null;                                    // live hostile outranks a body report
     e.target = { x: P.x, y: P.y }; e.path = null;
+    /* SHOUT. Before the radio ever connects, the man simply yells — everyone
+       in earshot converges. Killing the messenger stops HQ, not his friends,
+       which is what makes a silenced takedown feel like a decision. */
+    addNoise(e.x, e.y, 300, "shout");
+    for (const o of LV.guards){
+      if (o === e || down(o) || o.st === "alert") continue;
+      if (dist(o.x, o.y, e.x, e.y) > 340) continue;
+      o.st = "susp"; o.susT = Math.max(o.susT || 0, 9);
+      o.target = { x: P.x, y: P.y }; o.path = null;
+      if (o.pop !== "?"){ o.pop = "?"; o.popT = 0.9; }
+    }
   } else if (e.detect >= 0.45 && e.st === "patrol"){
     e.st = "susp"; e.susT = 6; e.target = { x: P.x, y: P.y }; e.path = null;
     e.pop = "?"; e.popT = 1; SFX.susp();
@@ -614,12 +634,20 @@ function guardUpdate(e, dt){
   else if (e.st === "search"){
     e.susT -= dt;
     const around = LV.lastKnown || { x: e.x, y: e.y };
+    /* COORDINATED SWEEP: each searcher owns a slice of the compass around the
+       last sighting, so three guards cover three directions instead of all
+       three walking the same corridor. Cheap, and it reads as training. */
+    if (e.sweepSlot == null) e.sweepSlot = LV.guards.indexOf(e);
     if (!e.path || e.pathI >= e.path.length){
-      const tx = Math.floor(around.x / T) + Math.floor(rr(-4, 5)), ty = Math.floor(around.y / T) + Math.floor(rr(-4, 5));
+      const n = Math.max(1, LV.guards.filter(q => q.st === "search").length);
+      const a = (e.sweepSlot % n) / n * TAU + rr(-0.5, 0.5);
+      const r = rr(2.5, 6.5);
+      const tx = Math.floor(around.x / T + Math.cos(a) * r), ty = Math.floor(around.y / T + Math.sin(a) * r);
       if (!solidMove(tx, ty, "g", { pathing: true })) nearestPathTo(e, tx, ty, "g");
+      else { e.sweepSlot++; }                       // blocked slice — take the next one
     }
     walkPath(e, e.spd * 1.1, dt);
-    if (e.susT <= 0 || (LV.alert === 0)){ e.st = "return"; e.path = null; }
+    if (e.susT <= 0 || (LV.alert === 0)){ e.st = "return"; e.path = null; e.sweepSlot = null; }
   }
   else if (e.st === "return"){
     const [rx, ry] = e.route[e.ri];
@@ -672,7 +700,7 @@ function dogUpdate(e, dt){
     walkPath(e, 175, dt);
     e.lungeT -= dt;
     if (d < 58 && e.lungeT <= 0){
-      e.lungeT = 1.4; playerHit(0.5); P.kd = 0.35;
+      e.lungeT = 1.4; playerHit(0.5, e.x, e.y); P.kd = 0.35;
       fxBlood(P.x, P.y, 4, "#7cf9a5");
     }
   } else {
@@ -848,7 +876,7 @@ function bulletsUpdate(dt){
           break;
         }
       } else if (!P.dead && dist(b.x, b.y, P.x, P.y) < 17){
-        playerHit(b.dmg); b.gone = true;
+        playerHit(b.dmg, b.x - b.vx * 0.1, b.y - b.vy * 0.1); b.gone = true;
       }
     }
   }
@@ -899,10 +927,11 @@ function entsUpdate(dt){
   updateDoors(dt, [P].concat(LV.guards, LV.dogs, LV.civs));
   /* global alert cool-down */
   if (LV.alert > 0 && LV.alertT < 1e8){
-    LV.alertT -= dt;
+    LV.alertT -= dt * (1 / diff().alert);          // harder settings hold the alert longer
     if (LV.alertT <= 0){
-      if (LV.alert === 2){ LV.alert = 1; LV.alertT = 18; musicWant("caution"); }
-      else { LV.alert = 0; musicWant("calm"); toast("…site returning to normal", "#9db4cc"); }
+      if (LV.alert === 2){ LV.alert = 1; LV.alertT = 18; musicWant("caution"); STING.lost();
+        toast("they lost you — but they're still looking", "#ffd54f"); }
+      else { LV.alert = 0; musicWant("calm"); STING.clear(); toast("…site returning to normal", "#9db4cc"); }
     }
   }
   if (LV.alert === 0 && MUSIC.want !== "calm") musicWant("calm");
