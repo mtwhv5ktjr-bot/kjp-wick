@@ -723,7 +723,13 @@ function drawIntel(){
   const rows = [
     ["MOVE", "WASD / arrows — hold SHIFT to run (LOUD), hold C to sneak (slow, quiet, fits vents)"],
     ["AIM / FIRE", "mouse + LMB · Q or wheel swaps weapons · R reloads"],
-    ["E", "choke (from behind) · drag bodies · hack terminals · take the file"],
+    ["E", "choke · drag · hack · take the file · DRIVE · TAKE A UNIFORM · STASH a body · HIDE inside"],
+    ["G / V", "cycle and USE gadgets — EMP, smoke, lure beacon, thermal, breach charge"],
+    ["DISGUISE", "strip a downed guard and walk in the front door. Sprinting, crouching or hauling a corpse blows it — officers see through it fastest"],
+    ["WANTED ★", "five stars. Kills and alarms raise it; each star buys them more. It only cools while NOBODY can see you — a bin or a vent cools it fastest"],
+    ["VEHICLES", "carts, vans, forklifts. Fast, loud, and they go through people. The engine is a siren you're sitting inside"],
+    ["THE ROOM", "fuel drums explode, extinguishers make free smoke, breaker boxes kill every light in the wing"],
+    ["GREED", "safes and drives are pure optional score — the loudest way to get rich"],
     ["F", "knock — every guard nearby checks the sound. Your best friend."],
     ["CONES", "green = calm, amber = curious, red = made you. Low desks hide you only while SNEAKING."],
     ["RADIO", "a spotting guard winds up a RADIO call — drop him before it completes and HQ never learns"],
@@ -737,11 +743,11 @@ function drawIntel(){
     ["RANKS", "GHOST = never spotted, zero alarms · +PACIFIST = BABA YAGA. Intel = score."],
   ];
   g.font = "700 12px Verdana";
-  let y = 120;
+  let y = 118;
   for (const [k, v] of rows){
-    g.fillStyle = "#7cf9a5"; g.font = "900 12px Arial Black"; g.fillText(k, L, y);
-    wrapText2(v, L + 130, y, 980, 15, "#9db4cc", "700 12px Verdana");
-    y += 40;
+    g.fillStyle = "#7cf9a5"; g.font = "900 11px Arial Black"; g.fillText(k, L, y);
+    wrapText2(v, L + 130, y, 1010, 13, "#9db4cc", "700 11px Verdana");
+    y += 29;
   }
   if (IS_TOUCH){
     g.fillStyle = "#ffd27c"; g.font = "900 12px Arial Black"; g.fillText("TOUCH", L, y);

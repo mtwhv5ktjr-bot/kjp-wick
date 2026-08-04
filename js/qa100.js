@@ -362,6 +362,154 @@ function runQA100(){
     return /address:/.test(msg) && /score:123/.test(msg) && /mode:kjp/.test(msg) && /ts:\d+/.test(msg);
   });
 
+  /* ═══ 6b. SANDBOX SYSTEMS ═══ */
+  qgroup("6b · SANDBOX");
+  qok("every level spawns vehicles, stashes, props and loot", () => {
+    for (let n = 1; n <= 6; n++){
+      const bad = qWith(n, () => (!LV.vehs.length && "no vehicles") || (!LV.stash.length && "no stash")
+        || (!LV.props.length && "no props") || (!LV.loot.length && "no loot"));
+      if (bad) return "L" + n + ": " + bad;
+    }
+    return true;
+  });
+  qok("nothing spawns inside geometry", () => {
+    for (let n = 1; n <= 6; n++){
+      const bad = qWith(n, () => {
+        const all = LV.vehs.concat(LV.stash, LV.props, LV.loot);
+        for (const o of all){
+          const t = tileAt(Math.floor(o.x / T), Math.floor(o.y / T));
+          if (t !== ".") return "a " + (o.t || o.kind || "thing") + " on '" + t + "'";
+        }
+        return false;
+      });
+      if (bad) return "L" + n + ": " + bad;
+    }
+    return true;
+  });
+  qok("a uniform hides you from the rank and file", () => qWith(1, () => {
+    const victim = LV.guards[0], watcher = LV.guards[1];
+    victim.sleep = 99;
+    P.x = watcher.x + 200; P.y = watcher.y; watcher.ang = 0; P.sneak = false; P.litF = 1; P.blown = 0;
+    const bare = seesPlayer(watcher, watcher.range, watcher.fov);
+    disguiseTake(victim);
+    const suited = seesPlayer(watcher, watcher.range, watcher.fov);
+    return bare > 0 && suited < bare * 0.4;
+  }));
+  qok("acting wrong in a uniform blows the cover", () => qWith(1, () => {
+    const victim = LV.guards[0]; victim.sleep = 99; disguiseTake(victim);
+    P.runHeld = true; P.moving = 1; P.drag = {};
+    for (let i = 0; i < 200 && P.disguise; i++) disguiseUpdate(1 / 60);
+    P.runHeld = false; P.drag = null;
+    return P.disguise === null;                     // it blew, exactly as designed
+  }));
+  qok("a dog is not fooled by a shirt", () => qWith(4, () => {
+    const victim = LV.guards[0]; victim.sleep = 99; disguiseTake(victim); P.blown = 0;
+    return disguiseMul(LV.dogs[0]) === 1 && disguiseMul(LV.guards[1]) < 1;
+  }));
+  qok("heat climbs through the five stars and queues response", () => qWith(1, () => {
+    heatAdd(1, "t"); const a = LV.heat;
+    heatAdd(2, "t"); const b = LV.heat;
+    heatAdd(2, "t");
+    return a === 1 && b === 3 && LV.heat === 5 && LV.waveQ.length > 0;
+  }));
+  qok("heat only cools when nobody can see you", () => qWith(1, () => {
+    heatAdd(2, "t");
+    const watcher = LV.guards[0];
+    P.x = watcher.x + 60; P.y = watcher.y; watcher.ang = 0; P.litF = 1; P.sneak = false;
+    LV.heatDecay = 0; heatUpdate(1);
+    const watched = LV.heatDecay;
+    P.x = -9999; P.y = -9999;                        // out of everyone's world
+    heatUpdate(1);
+    return watched === 0 && LV.heatDecay > 0;
+  }));
+  qok("hiding in a container cools heat faster", () => qWith(1, () => {
+    heatAdd(2, "t"); P.x = -9999; P.y = -9999;
+    LV.heatDecay = 0; P.stashed = false; heatUpdate(1); const open = LV.heatDecay;
+    LV.heatDecay = 0; P.stashed = true; heatUpdate(1); const hid = LV.heatDecay;
+    P.stashed = false;
+    return hid > open;
+  }));
+  qok("a stashed player is invisible and a stashed body is never found", () => qWith(1, () => {
+    P.stashed = true;
+    const blind = LV.guards.every(e => seesPlayer(e, e.range, e.fov) === 0);
+    P.stashed = false;
+    const b = LV.guards[0]; b.sleep = 99; P.drag = b;
+    const c = LV.stash[0]; P.x = c.x; P.y = c.y;
+    PRESS.add("KeyE"); sandboxInteract(); PRESS.clear();
+    return blind && b.found === true && P.drag === null;
+  }));
+  qok("a driven vehicle accelerates and moves", () => qWith(1, () => {
+    const v = LV.vehs[0]; vehEnter(v);
+    const x0 = v.x, y0 = v.y;
+    KEYS.add("KeyW"); for (let i = 0; i < 6; i++) sandboxUpdate(1 / 60); KEYS.delete("KeyW");
+    const ok = v.spd > 20 && dist(x0, y0, v.x, v.y) > 1;
+    vehExit();
+    return ok;
+  }));
+  qok("a vehicle at speed kills and spikes heat", () => qWith(1, () => {
+    const v = LV.vehs[0]; vehEnter(v); v.spd = 200;
+    const e = LV.guards[0];
+    e.x = v.x + Math.cos(v.ang) * 10; e.y = v.y + Math.sin(v.ang) * 10;
+    const h0 = LV.heat;
+    sandboxUpdate(1 / 60);
+    const ok = e.dead === true && LV.heat > h0;
+    vehExit();
+    return ok;
+  }));
+  qok("every gadget fires, spends a charge, and dry-fires at zero", () => qWith(1, () => {
+    for (const id of P.gads){
+      P.gi = P.gads.indexOf(id);
+      const before = P.gadN[id];
+      MOUSE.x = W / 2 + 40; MOUSE.y = H / 2;
+      gadgetUse();
+      if (P.gadN[id] !== before - 1 && !(id === "breach" && P.gadN[id] === before)) return id + " did not spend";
+      P.gadN[id] = 0; gadgetUse();
+      if (P.gadN[id] < 0) return id + " went negative";
+    }
+    return true;
+  }));
+  qok("smoke blocks line of sight", () => qWith(1, () => {
+    LV.smokes.push({ x: P.x + 100, y: P.y, r: 120, t: 10 });
+    return smokeBlocks(P.x, P.y, P.x + 200, P.y) === true && smokeBlocks(P.x, P.y - 400, P.x + 200, P.y - 400) === false;
+  }));
+  qok("an EMP darkens cameras and lights in range", () => qWith(3, () => {
+    const c = LV.cams[0];
+    P.x = c.x; P.y = c.y; MOUSE.x = W / 2; MOUSE.y = H / 2;
+    P.gi = P.gads.indexOf("emp"); P.gadN.emp = 1;
+    gadgetUse();
+    return c.dead === true;
+  }));
+  qok("a fuel drum kills anyone near it and spikes heat", () => qWith(1, () => {
+    const drum = LV.props.find(p => p.t === "barrel");
+    const e = LV.guards[0]; e.x = drum.x + 40; e.y = drum.y;
+    const h0 = LV.heat;
+    propHit(drum, true);
+    return e.dead === true && LV.heat > h0 && drum.dead === true;
+  }));
+  qok("a breaker box kills the lights around it", () => qWith(1, () => {
+    const box = LV.props.find(p => p.t === "power");
+    /* guarantee a lamp in range so the fixture tests the RULE, not the map */
+    LIGHTS.push({ x: box.x + 60, y: box.y, r: 150, dead: false });
+    const lit = LIGHTS.filter(L => !L.dead && !L.em && dist(L.x, L.y, box.x, box.y) < 460).length;
+    propHit(box, true);
+    const after = LIGHTS.filter(L => !L.dead && !L.em && dist(L.x, L.y, box.x, box.y) < 460).length;
+    return lit > 0 && after === 0;
+  }));
+  qok("safes and laptops pay out exactly once", () => qWith(1, () => {
+    const l = LV.loot[0];
+    P.x = l.x; P.y = l.y; LV.stats.loot = 0;
+    KEYS.add("KeyE");
+    for (let i = 0; i < 400; i++) sandboxUpdate(1 / 60);
+    KEYS.delete("KeyE");
+    const once = LV.stats.loot;
+    for (let i = 0; i < 200; i++) sandboxUpdate(1 / 60);
+    return l.done === true && once > 0 && LV.stats.loot === once;
+  }));
+  qok("sandbox state never leaks between ops", () => {
+    qWith(1, () => { heatAdd(3, "t"); P.disguise = "guard"; LV.smokes.push({ x: 0, y: 0, r: 10, t: 9 }); });
+    return qWith(1, () => LV.heat === 0 && P.disguise === null && LV.smokes.length === 0 && !P.veh && !P.stashed);
+  });
+
   /* ═══ 7. SAVE & STATE ═══ */
   qgroup("7 · SAVE & STATE");
   qok("progress round-trips through localStorage", () => {

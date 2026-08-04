@@ -8,6 +8,7 @@ function startLevel(n){
   loadLevel(n);
   initEnts();
   prerenderLevel();
+  sandboxInit();                                   // after prerender: LIGHTS must exist
   rainDrops = null;
   introT = 2.6;
   LV.stats.spotted = 0;

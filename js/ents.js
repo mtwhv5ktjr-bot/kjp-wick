@@ -104,17 +104,19 @@ function lightFactorAt(x, y){
    Standing in darkness shrinks every sight range — shooting out lamps is a
    legitimate legal strategy. Dogs don't care (nose), cameras don't care (IR). */
 function seesPlayer(e, range, fov, ignoreLight){
-  if (P.dead) return 0;
+  if (P.dead || P.stashed) return 0;                  // a closed bin has no silhouette
   const d = dist(e.x, e.y, P.x, P.y);
   const lightMul = ignoreLight ? 1 : (0.62 + 0.5 * (P.litF == null ? 1 : P.litF));
   const R = range * (skinDef().detectMul || 1) * (P.sneak ? 0.62 : 1) * lightMul * diff().detect;
   if (d > R) return 0;
   if (Math.abs(angDiff(e.ang, angTo(e.x, e.y, P.x, P.y))) > fov / 2) return 0;
   if (!los(e.x, e.y, P.x, P.y, true, P.sneak)) return 0;
+  if (typeof smokeBlocks === "function" && smokeBlocks(e.x, e.y, P.x, P.y)) return 0;
   /* closer + louder stance = faster fill; point-blank is instant */
-  if (d < 70) return 99;
+  const dg = typeof disguiseMul === "function" ? disguiseMul(e) : 1;
+  if (d < 70 && dg > 0.5) return 99;
   const stance = P.sneak ? 0.55 : (P.runHeld && P.moving ? 1.5 : 1);
-  return (1.25 - d / R) * stance * 2.1 * (LV.alert > 0 ? 1.5 : 1);
+  return (1.25 - d / R) * stance * 2.1 * (LV.alert > 0 ? 1.5 : 1) * dg;
 }
 
 /* ---------- global alert ---------- */
@@ -135,6 +137,7 @@ function goCombat(fromX, fromY){
    Site goes weapons-free and a QRF wave storms the entrances. */
 function bodyAlarm(x, y, label){
   LV.stats.alarms++;
+  heatAdd(2, "they called it in");
   toast(label || "🚨 BODY REPORTED — QRF INBOUND", "#ff5b5b");
   STING.alarm();
   goCombat(x, y);
@@ -169,6 +172,14 @@ function playerUpdate(dt){
   if (P.dead) return;
   P.hurtT = Math.max(0, P.hurtT - dt); P.flashT = Math.max(0, P.flashT - dt);
   if (P.kd > 0){ P.kd -= dt; return; }
+  /* driving and hiding are their own modes — they own the controls */
+  if (P.veh || P.stashed){
+    P.ctx = P.veh ? "E — GET OUT" : "E — CLIMB OUT";
+    P.moving = P.veh ? (Math.abs(P.veh.spd) > 8 ? 1 : 0) : 0;
+    sandboxExitInteract();
+    P.litF = lightFactorAt(P.x, P.y);
+    return;
+  }
 
   /* stance + move intent (keyboard or touch stick) */
   /* HOLD or TOGGLE, the player's call (OPTIONS) */
@@ -355,6 +366,9 @@ function _interactions(dt){
     if (!holdingE){ P.drag = null; }
     else { P.drag.x = P.x - Math.cos(P.ang) * 20; P.drag.y = P.y - Math.sin(P.ang) * 20; }
   }
+  /* the sandbox gets first refusal on E — vehicles, uniforms, stashing, loot */
+  const sbx = sandboxInteract();
+  if (sbx){ P.ctx = sbx; return; }
   /* choke candidate: behind, close, alive */
   let cand = null;
   for (const e of LV.guards){
@@ -580,7 +594,7 @@ function guardUpdate(e, dt){
         if (e.bodyRadio){
           const b = e.bodyRadio; b.found = true; e.bodyRadio = null;
           bodyAlarm(b.x, b.y);
-        } else goCombat(P.x, P.y);
+        } else { goCombat(P.x, P.y); heatAdd(1, "radio call completed"); }
       }
     }
   }
@@ -837,6 +851,13 @@ function bulletsUpdate(dt){
         break;
       }
       if (b.fromPlayer){
+        /* chaos props take the round before anything else does */
+        let hitProp = false;
+        for (const pr of (LV.props || [])){
+          if (pr.dead || dist(b.x, b.y, pr.x, pr.y) > 16) continue;
+          propHit(pr, true); b.gone = true; hitProp = true; break;
+        }
+        if (hitProp) break;
         /* lamps die to gunfire — darkness is a weapon */
         for (const L of LIGHTS){
           if (L.dead || L.em || dist(b.x, b.y, L.x, L.y) > 11) continue;
@@ -867,6 +888,7 @@ function bulletsUpdate(dt){
             e.hp -= b.dmg; fxBlood(e.x, e.y, 5, e.kind === "civ" ? "#c95b5b" : "#a33");
             if (e.hp <= 0){
               e.dead = true; SFX.thud(); LV.stats.kills++;
+              heatAdd(e.kind === "civ" ? 2 : 1, e.kind === "civ" ? "you shot a civilian" : "a body with a hole in it");
               if (e.kind === "civ"){ LV.stats.civHurt++; toast("you shot an ANALYST. bad optics.", "#ff5b5b"); }
               LV.decals.push({ x: e.x, y: e.y, r: 5, max: 15 + rnd() * 9, col: "rgba(120,20,26,0.5)" });
               if (e.kind !== "dog" && e.kind !== "civ") _dropCard(e);
@@ -911,6 +933,7 @@ function fxUpdate(dt){
 /* ---------- per-frame world tick ---------- */
 function entsUpdate(dt){
   LV.time += dt;
+  sandboxUpdate(dt);
   /* QRF waves ride sim-time */
   for (const w of LV.waveQ){ w.t -= dt; if (w.t <= 0 && !w.done){ w.done = true; reinforce(w.n); } }
   LV.waveQ = LV.waveQ.filter(w => !w.done);

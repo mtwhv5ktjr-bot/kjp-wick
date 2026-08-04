@@ -963,6 +963,8 @@ function drawGame(){
   }
   /* doors */
   for (const d of LV.doors) drawDoor(d);
+  /* sandbox furniture: vehicles, drums, breakers, bins, safes, beacons */
+  drawSandboxWorld();
 
   /* noise rings — only sounds loud enough to matter get drawn, otherwise
      walking paints a permanent halo on the player */
@@ -1032,7 +1034,8 @@ function drawGame(){
       g.fillStyle = "rgba(255,90,90,0.9)"; g.beginPath(); g.arc(lx, ly, 2.2, 0, TAU); g.fill();
     }
   }
-  if (!P.dead) drawKJP(P.x, P.y, P.ang, { moving: P.moving });
+  if (!P.dead && !P.veh && !P.stashed) drawKJP(P.x, P.y, P.ang, { moving: P.moving });
+  drawSmoke();                                     // above bodies, below the darkness pass
   if (P.choke){
     g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth = 5;
     g.beginPath(); g.arc(P.x, P.y - 32, 10, 0, TAU); g.stroke();
@@ -1100,6 +1103,7 @@ function drawGame(){
   g.drawImage(GLOW2, 0, 0, W, H);
   g.globalAlpha = 1;
   g.restore();
+  drawThermal();                                   // silhouettes punch through the dark
 
   /* cone tints above the dark — crisp, state-colored, always readable */
   g.save(); g.translate(-Math.round(camX), -Math.round(camY));
@@ -1386,6 +1390,7 @@ function drawHUD(){
     g.textAlign = "left";
   }
   drawRadar();
+  drawSandboxHUD();
   drawFocusMeter();
   drawDamageArrow();
   drawTutorial();
