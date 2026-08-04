@@ -186,6 +186,12 @@ function playerUpdate(dt){
   if (OPT.sneakHold) P.sneak = KEYS.has("ControlLeft") || KEYS.has("KeyC") || TOUCH.sneakTgl;
   else { if (PRESS.has("KeyC") || PRESS.has("ControlLeft")) P.sneakTgl = !P.sneakTgl;
          P.sneak = P.sneakTgl || TOUCH.sneakTgl; }
+  /* ALREADY IN A DUCT? Then you are crouching, and this MUST be decided
+     BEFORE the move is computed. It used to be applied after, so a player who
+     released C inside the shaft moved that frame with sneak=false — which
+     makes every vent tile solid — and could not move at all. That is the
+     level 3 vent trap: fully stuck, in the only route up from the sub-floor. */
+  if (tileAt(Math.floor(P.x / T), Math.floor(P.y / T)) === "V") P.sneak = true;
   P.runHeld = KEYS.has("ShiftLeft") || KEYS.has("ShiftRight") || TOUCH.run;
   let mx = (KEYS.has("KeyD") || KEYS.has("ArrowRight") ? 1 : 0) - (KEYS.has("KeyA") || KEYS.has("ArrowLeft") ? 1 : 0);
   let my = (KEYS.has("KeyS") || KEYS.has("ArrowDown") ? 1 : 0) - (KEYS.has("KeyW") || KEYS.has("ArrowUp") ? 1 : 0);
@@ -211,9 +217,21 @@ function playerUpdate(dt){
       if (!P.sneak) addNoise(P.x, P.y, (P.runHeld ? 165 : 55) * soft * surf, "step");
     }
   }
-  /* vents force a crouch — you crawl in a duct, you don't jog */
-  const here = tileAt(Math.floor(P.x / T), Math.floor(P.y / T));
-  if (here === "V") P.sneak = true;
+  /* LAST-RESORT UNSTICK. If the player is somehow inside a tile that is solid
+     for them right now, walk them out to the nearest legal tile rather than
+     leaving them wedged forever. Costs nothing when everything is fine. */
+  const tx0 = Math.floor(P.x / T), ty0 = Math.floor(P.y / T);
+  if (solidMove(tx0, ty0, "p", { sneak: P.sneak, unlocked: _unlockedDoors() })){
+    let best = null, bd = 1e9;
+    for (let r = 1; r <= 3 && !best; r++)
+      for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++){
+        if (solidMove(tx0 + i, ty0 + j, "p", { sneak: P.sneak, unlocked: _unlockedDoors() })) continue;
+        const cx = (tx0 + i) * T + T / 2, cy = (ty0 + j) * T + T / 2;
+        const d = dist(P.x, P.y, cx, cy);
+        if (d < bd){ bd = d; best = { x: cx, y: cy }; }
+      }
+    if (best){ P.x = best.x; P.y = best.y; }
+  }
 
   /* aim: mouse, or touch aim-finger; soft aim assist on coarse pointers */
   if (TOUCH.aim){
@@ -430,6 +448,14 @@ function _interactions(dt){
     else P.ctx = "LOCKED — NEED " + (d.kind === "Y" ? "YELLOW" : d.kind === "B" ? "BLUE" : "RED") + " CARD";
   }
   if (d && d.kind === "C" && LV.hacks < (LV.def.hacksNeed || 0)) P.ctx = "SEALED — HACK THE TERMINALS";
+  /* A DUCT IS ONLY A ROUTE IF YOU KNOW IT IS ONE. On level 3 the vent is the
+     ONLY way up from the sub-floor, and standing next to it while upright it
+     reads as solid wall — so say the word out loud. */
+  if (!P.ctx && !P.sneak){
+    const px0 = Math.floor(P.x / T), py0 = Math.floor(P.y / T);
+    for (const [ix, iy] of [[1, 0], [-1, 0], [0, 1], [0, -1]])
+      if (tileAt(px0 + ix, py0 + iy) === "V"){ P.ctx = "HOLD C — CRAWL INTO THE VENT"; break; }
+  }
 }
 function _pickups(){
   for (const p of LV.picks){

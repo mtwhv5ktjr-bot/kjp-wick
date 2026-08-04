@@ -194,6 +194,22 @@ function runQA100(){
     return solidStanding === true && solidSneaking === false;
   }));
   qok("guards never path through vents", () => qWith(1, () => solidMove(5, 3, "g", {}) === true));
+  /* PLAYER-REPORTED, LEVEL 3: released crouch inside the shaft and could not
+     move at all, in the only route up from the sub-floor. */
+  qok("a player in a vent can always move, crouch key or not", () => qWith(3, () => {
+    P.x = 13 * T + 24; P.y = 22 * T + 24;
+    if (tileAt(13, 22) !== "V") return "fixture is not a vent tile";
+    KEYS.clear(); KEYS.add("KeyW");                 // crouch deliberately NOT held
+    const x0 = P.x, y0 = P.y;
+    for (let i = 0; i < 60; i++){ playerUpdate(1 / 60); inputEndFrame(); }
+    KEYS.clear();
+    return dist(x0, y0, P.x, P.y) > 8;
+  }));
+  qok("a player wedged in solid geometry is pushed back out", () => qWith(1, () => {
+    P.x = 2 * T + 24; P.y = 2 * T + 24;              // dropped inside the wall ring
+    playerUpdate(1 / 60);
+    return !solidMove(Math.floor(P.x / T), Math.floor(P.y / T), "p", { sneak: P.sneak, unlocked: {} });
+  }));
   qok("firing consumes ammo and reloads from reserve", () => qWith(1, () => {
     P.weapons = ["fists", "tranq"]; P.wi = 1; P.ammoIn.tranq = 2; P.darts = 10; P.fireT = 0;
     _fire("tranq", WEAPONS.tranq);
