@@ -196,6 +196,25 @@ function enterAddress(){
   document.getElementById("wsX").onclick = () => s.classList.remove("on");
 })();
 
+/* Re-read gear (and guns) for the wallet already linked — for the minute after
+   you mint, when the game should just SEE it without a reconnect dance. */
+async function refreshGear(){
+  const addr = walletAddr || window.watchAddr;
+  if (!addr){ walletStatus = "connect or watch a wallet first"; return; }
+  if (walletBusy) return;
+  walletBusy = true; walletStatus = "re-reading the chain…";
+  try{
+    const gear = await rpcGearOf(addr);
+    let types = window.ownedGunTypes || [], mods = window.ownedModTypes || [];
+    try{ const t = await rpcGunsOf(addr); if (t) types = t; }catch(e){}
+    try{ mods = await rpcModsOf(addr); }catch(e){}
+    const had = (window.ownedGearTypes || []).length;
+    applyGuns(types, addr, !walletAddr, false, mods, gear);
+    if (gear.length > had) walletStatus = "✓ +" + (gear.length - had) + " new gear — already equipped";
+  }catch(e){ walletStatus = "refresh failed — try again"; }
+  walletBusy = false;
+}
+
 function setPlayerName(){
   const n = prompt("Display name for the board (max 16 chars).\nBlank = wallet address:", playerName);
   if (n === null) return;

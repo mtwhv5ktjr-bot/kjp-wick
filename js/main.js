@@ -17,6 +17,12 @@ function startLevel(n){
   musicWant(LV.alert === 2 ? "combat" : LV.alert === 1 ? "caution" : "calm");
   if (audioArmed) ambStart(LV.def.theme);        // the room, per district
   tutStart();
+  /* confirm the loadout out loud at the top of every op — no equip screen to
+     forget, no doubt about whether the NFTs actually came in with you */
+  const gearOn = window.ownedGearTypes || [];
+  if (gearOn.length) setTimeout(() => {
+    if (LV) toast("✓ " + gearOn.length + " GEAR ACTIVE — " + gearOn.map(t => GEARDEFS[t] && GEARDEFS[t].name).filter(Boolean).join(", "), "#ff9d5b");
+  }, 60);
 }
 
 /* first gesture births the AudioContext (autoplay policy) */
@@ -81,6 +87,7 @@ function frame(now, syncOnly){
   else if (STATE === "options") drawOptions();
   else if (STATE === "dossier") drawDossier();
   else if (STATE === "case") drawCase();
+  else if (STATE === "ready") drawReadyRoom();
   else if (STATE === "brief") drawBrief(dt);
   else if (STATE === "debrief") drawDebrief(dt);
   else if (STATE === "dead") drawDead();

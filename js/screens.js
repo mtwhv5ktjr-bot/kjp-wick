@@ -206,7 +206,8 @@ function drawTitle(){
   btn(bx + bw / 2 + 5, by + (bh + gap), bw / 2 - 5, bh, "🔫 ARSENAL", () => { STATE = "arsenal"; }, { fs: 13 });
   btn(bx, by + 2 * (bh + gap), bw / 2 - 5, bh, "🎖 DOSSIER", () => { STATE = "dossier"; }, { fs: 13 });
   btn(bx + bw / 2 + 5, by + 2 * (bh + gap), bw / 2 - 5, bh, "⚙ OPTIONS", () => { STATE = "options"; }, { fs: 13 });
-  btn(bx, by + 3 * (bh + gap), bw, bh, "📼 INTEL / HOW TO PLAY", () => { STATE = "intel"; }, { fs: 13 });
+  btn(bx, by + 3 * (bh + gap), bw / 2 - 5, bh, "🎒 READY ROOM", () => { STATE = "ready"; }, { fs: 12 });
+  btn(bx + bw / 2 + 5, by + 3 * (bh + gap), bw / 2 - 5, bh, "📼 INTEL", () => { STATE = "intel"; }, { fs: 13 });
   /* difficulty is a first-class fact on the front page, not a buried setting */
   const d = diff();
   g.font = "900 11px Arial Black"; g.fillStyle = "#ffd27c";
@@ -685,11 +686,21 @@ function drawArsenal(){
   let gy = wy + 232;
   g.font = "900 13px Arial Black"; g.fillStyle = "#ff9d5b";
   g.fillText("KJP GEAR · 100 PIECES", wx, gy);
-  g.font = "700 9px Verdana"; g.fillStyle = "#8a97a8";
-  g.fillText(gearOwned.length ? "✦ " + gearOwned.length + "/8 types held — no slots, it rides you"
-                              : "works in KJP + PEPE WICK · mint at kjp-game.wick.pics/mint", wx, gy + 15);
-  g.fillStyle = "#57717f";
-  g.fillText("50% buys & burns KJP · 50% buys & burns WICK", wx, gy + 29);
+  /* NO SLOTS, NO LIMIT — say it out loud. Everything owned is always live,
+     so there is no equip step to miss and nothing to choose between. */
+  if (gearOwned.length){
+    g.font = "900 10px Arial Black"; g.fillStyle = "#7cf9a5";
+    g.fillText("✓ ALL " + gearOwned.length + " EQUIPPED — no slots, no limit", wx, gy + 15);
+    g.font = "700 9px Verdana"; g.fillStyle = "#8a97a8";
+    g.fillText("every piece you own is live in every op, automatically", wx, gy + 28);
+  } else {
+    g.font = "700 9px Verdana"; g.fillStyle = "#8a97a8";
+    g.fillText("anything you own is ALWAYS equipped — no slots, no limit", wx, gy + 15);
+    g.fillStyle = "#57717f";
+    g.fillText("mint at kjp-game.wick.pics/mint · 50% burns KJP, 50% burns WICK", wx, gy + 28);
+  }
+  /* minted mid-session? pull it in without reconnecting the wallet */
+  btn(wx + 232, gy - 12, 98, 26, walletBusy ? "…" : "↻ REFRESH", () => refreshGear(), { fs: 10 });
   gy += 40;
   const cw2 = 160, ch2 = 56;
   for (let t = 1; t <= 8; t++){

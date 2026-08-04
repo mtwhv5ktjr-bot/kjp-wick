@@ -1279,6 +1279,24 @@ function drawHUD(){
     g.fillStyle = "rgba(255,255,255,0.6)"; g.fillRect(cx0, hy - 8, 18, 3);
     cx0 += 24;
   }
+  if (LV.cards.y || LV.cards.b || LV.cards.r) hy += 16;
+  /* ACTIVE GEAR — every piece you own, always on. Shown so the perks are
+     visible facts rather than something you have to trust. */
+  const gearOn = window.ownedGearTypes || [];
+  if (gearOn.length){
+    g.font = "900 8px Arial Black"; g.fillStyle = "#ff9d5b";
+    g.fillText("GEAR — ALL " + gearOn.length + " ACTIVE", 26, hy);
+    let gx = 26, gyy = hy + 12;
+    for (const t of gearOn){
+      const d = GEARDEFS[t]; if (!d) continue;
+      g.font = "900 8px Arial Black";
+      const w2 = g.measureText(d.tag).width + 10;
+      if (gx + w2 > 250){ gx = 26; gyy += 14; }
+      g.fillStyle = "rgba(255,157,91,0.16)"; g.fillRect(gx, gyy - 8, w2, 11);
+      g.fillStyle = "#ffbe8a"; g.fillText(d.tag, gx + 5, gyy);
+      gx += w2 + 4;
+    }
+  }
   /* weapon panel */
   const wid = curWid(), w = wSpec(wid);
   g.fillStyle = "rgba(6,11,16,0.78)"; g.fillRect(18, H - 84, 262, 66);
