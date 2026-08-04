@@ -33,7 +33,7 @@ addEventListener("keydown", armAudio, { once: false });
 function gameUpdate(dt){
   if (LV.over){
     if (LV.over === "win"){ finishLevel(); }
-    else if (LV.over === "dead"){ STATE = "dead"; }
+    else if (LV.over === "dead"){ STATE = "dead"; DB_deadLine = null; }   // fresh line per death
     LV.over = null;
     return;
   }

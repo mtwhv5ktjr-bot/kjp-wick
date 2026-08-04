@@ -415,7 +415,7 @@ function wrapText2(txt, x, y, maxW, lh, col, font){
 }
 
 /* ---------- debrief / dead ---------- */
-let DB = null;
+let DB = null, DB_deadLine = null;
 function computeResult(){
   const s = LV.stats;
   const ghost = !(s.spotted > 0) && s.alarms === 0;
@@ -502,15 +502,31 @@ function drawDebrief(dt){
   g.fillText("campaign total " + campaignScore().toLocaleString() + " pts", 90, H - 40);
   dispatchClicks();
 }
+/* Death lines rotate so the screen keeps its teeth on the twentieth attempt.
+   Picked once per death (deadLine), not per frame. */
+const DEATH_LINES = [
+  ["Kenny John Pierre was taken into custody.",              "“COURT IS ADJOURNED.”"],
+  ["The Agency filed the report before the body was cold.",  "“MISTRIAL.”"],
+  ["Cause of death: nine thousand paid posts and one bullet.","“THEY'LL SAY YOU RESISTED.”"],
+  ["Your licence, your name, and now the rest of it.",       "“DISBARRED — POSTHUMOUSLY.”"],
+  ["Evidence bag 88-A remains in Agency custody.",           "“THE RECORD IS SEALED.”"],
+  ["No obituary. They don't run those for assets.",          "“NO SUCH LAWYER.”"],
+  ["Two kilos in the car. One counselor in the ground.",     "“CASE CLOSED.” — THEY WISH."],
+  ["Billable hours: terminated.",                            "“OBJECTION. OVERRULED. PERMANENTLY.”"]
+];
 function drawDead(){
   UIB = [];
+  if (DB_deadLine == null) DB_deadLine = Math.floor(Math.random() * DEATH_LINES.length);
+  const [sub, quote] = DEATH_LINES[DB_deadLine];
   g.fillStyle = "rgba(20,3,6,0.94)"; g.fillRect(0, 0, W, H);
   g.font = "900 54px Arial Black"; g.textAlign = "center";
   g.fillStyle = "#ff5b5b"; g.fillText("MISSION FAILED", W / 2, H / 2 - 70);
   g.font = "700 16px Verdana"; g.fillStyle = "#c9cdd6";
-  g.fillText("Kenny John Pierre was taken into custody.", W / 2, H / 2 - 26);
+  g.fillText(sub, W / 2, H / 2 - 26);
   g.font = "900 20px Arial Black"; g.fillStyle = "#e6f1ff";
-  g.fillText("“COURT IS ADJOURNED.”", W / 2, H / 2 + 14);
+  g.fillText(quote, W / 2, H / 2 + 14);
+  g.font = "700 11px Verdana"; g.fillStyle = "#7c8ba3";
+  g.fillText("★".repeat(LV && LV.heat ? LV.heat : 0) + (LV && LV.heat ? "  they were at " + HEAT_NAMES[LV.heat] : ""), W / 2, H / 2 + 40);
   g.textAlign = "left";
   btn(W / 2 - 230, H / 2 + 60, 220, 50, "↻ RETRY OP", () => startLevel(LV.n));
   btn(W / 2 + 10, H / 2 + 60, 220, 50, "☰ MENU", () => { STATE = "select"; });
