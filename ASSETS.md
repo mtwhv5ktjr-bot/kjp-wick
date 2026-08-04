@@ -58,6 +58,17 @@ chat can't be saved to disk (known limitation since the forge sessions).
 - **tile-vault**: "seamless tileable dark blue-grey metal deck plating texture,
   top-down, subtle rivets, video game floor tile, very dark, low contrast, 96x96"
 
+## Cabinet art (games.wick.pics)
+
+`assets/cabinet-art.png` is the arcade marquee — it ships to the arcade repo as
+`pepe-wick/kjp-art.png`. **It must be 4:3 (960×720).** The hall's `.crt` is
+`aspect-ratio:4/3` with `object-fit:cover`, so a 16:9 screenshot gets its left
+and right quarters sliced off (the wordmark and the bust — i.e. everything).
+It is rendered by the game itself: resize `cv` to 960×720, compose with the
+procedural art (skyline, searchlights, `bustKJP`, rain, wordmark), POST to
+`/save?f=assets/cabinet-art.png`, restore `cv` to 1280×720. Force
+`PROG.skin="midnight"` first — the cabinet wears the icon, not your loadout.
+
 ## Locked DNA (do not drift)
 
 - Face: black hair curtains + shades + green frog muzzle. NEVER redesign.
