@@ -55,6 +55,7 @@ async function connectWallet(){
     if (INAPP && !window.ethereum){ walletStatus = "in-app browser — paste your address instead"; walletBusy = false; enterAddress(); return; }
     const eth = await getEth();
     if (!eth){ walletStatus = "no wallet — install MetaMask/Rabby, or WATCH an address"; walletBusy = false; return; }
+    watchWalletEvents();                     // bind once the provider actually exists
     let accts;
     if (eth === window.ethereum) accts = await eth.request({ method: "eth_requestAccounts" });
     else { walletStatus = "approve in your wallet app, then come back…"; accts = await eth.enable(); }
@@ -75,6 +76,45 @@ async function connectWallet(){
   }
   walletBusy = false;
 }
+/* SWITCH WALLET — the thing every wallet UI hides.
+   eth_requestAccounts silently reuses whatever is already approved, so a
+   player with two wallets gets stuck on the first one forever. Revoking the
+   permission first FORCES the account picker open. Falls back to a plain
+   reconnect on wallets that don't implement the permission RPCs. */
+async function switchWallet(){
+  if (walletBusy) return;
+  const eth = window.ethereum;
+  if (!eth){ walletStatus = "no wallet app — use WATCH to paste an address"; enterAddress(); return; }
+  walletBusy = true; walletStatus = "pick an account in your wallet…";
+  try{
+    try{
+      await eth.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
+    }catch(e){ /* not supported everywhere — requestPermissions below still prompts */ }
+    try{
+      await eth.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
+    }catch(e){
+      if (e && (e.code === 4001)) { walletStatus = "switch cancelled"; walletBusy = false; return; }
+    }
+  }catch(e){}
+  walletBusy = false;
+  await connectWallet();                     // re-reads whatever they just picked
+}
+/* the wallet changed underneath us (user switched in MetaMask itself) —
+   follow it instead of silently showing the old wallet's loadout */
+function watchWalletEvents(){
+  const eth = window.ethereum;
+  if (!eth || !eth.on || eth._kjpBound) return;
+  eth._kjpBound = true;
+  eth.on("accountsChanged", accts => {
+    if (!accts || !accts.length){ disconnectWallet(); walletStatus = "wallet locked or disconnected"; return; }
+    if (walletAddr && accts[0].toLowerCase() === walletAddr.toLowerCase()) return;
+    walletStatus = "wallet changed — reloading your loadout…";
+    connectWallet();
+  });
+  eth.on("chainChanged", () => { if (walletAddr) connectWallet(); });
+}
+try{ watchWalletEvents(); }catch(e){}
+
 function disconnectWallet(){
   walletAddr = null; watchMode = false;
   window.ownedGunTypes = []; window.ownedModTypes = []; window.ownedGearTypes = [];

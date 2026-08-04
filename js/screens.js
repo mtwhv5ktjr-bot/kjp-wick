@@ -635,7 +635,16 @@ function drawArsenal(){
   g.font = "900 14px Arial Black"; g.fillStyle = "#7cf9a5"; g.fillText("WALLET", wx + 18, wy + 30);
   g.font = "700 11px Verdana"; g.fillStyle = "#9db4cc";
   wrapText2(walletStatus || "link your PulseChain wallet to load WICK ARSENAL guns.", wx + 18, wy + 52, 294, 15, "#9db4cc", "700 11px Verdana");
-  btn(wx + 18, wy + 92, 140, 40, walletBusy ? "…" : "CONNECT", () => connectWallet(), { fs: 13 });
+  /* the connected address, spelled out — not just a status sentence */
+  const shown = walletAddr || window.watchAddr;
+  if (shown){
+    g.font = "900 12px monospace"; g.fillStyle = walletAddr ? "#7cf9a5" : "#8fc7ff";
+    g.fillText(shown.slice(0, 10) + "…" + shown.slice(-6), wx + 18, wy + 84);
+    g.font = "700 9px Verdana"; g.fillStyle = "#57717f";
+    g.textAlign = "right"; g.fillText(walletAddr ? "can sign" : "view-only", wx + 312, wy + 84); g.textAlign = "left";
+  }
+  btn(wx + 18, wy + 92, 140, 40, walletBusy ? "…" : (shown ? "⇄ SWITCH" : "CONNECT"),
+      () => shown ? switchWallet() : connectWallet(), { fs: 13 });
   btn(wx + 172, wy + 92, 140, 40, "👁 WATCH", () => enterAddress(), { fs: 13 });
   if (walletAddr || watchMode) btn(wx + 18, wy + 142, 140, 34, "UNLINK", () => { disconnectWallet(); }, { fs: 11, danger: true });
   btn(wx + 172, wy + 142, 140, 34, "NAME: " + (playerName || "—"), () => setPlayerName(), { fs: 10 });

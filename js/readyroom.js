@@ -167,9 +167,61 @@ function drawReadyRoom(){
      lives up by the title, where it cannot collide with it */
   g.font = "700 9px Verdana"; g.fillStyle = buyHot ? "#ffd27c" : "#57717f";
   g.fillText("1,000,000 PLS · 50% burns KJP · 50% burns WICK", 216, H - 70);
-  g.font = "700 10px Verdana"; g.textAlign = "right";
-  g.fillStyle = walletAddr || window.watchAddr ? "#7cf9a5" : "#57717f";
-  g.fillText(walletStatus || "no wallet linked", W - 60, 58);
-  g.textAlign = "left";
+  drawWalletPanel();
   dispatchClicks();
+}
+
+/* ---------------- WHO AM I ----------------
+   The single most confusing thing about a wallet-gated game is not knowing
+   which wallet it is currently reading. This says so in full, says whether it
+   can sign, and puts SWITCH one tap away. */
+function drawWalletPanel(){
+  const addr = walletAddr || window.watchAddr || null;
+  const watching = !walletAddr && !!window.watchAddr;
+  const x = W - 372, y = 34, w2 = 312, h2 = 116;
+
+  g.fillStyle = "rgba(6,11,16,0.86)"; g.fillRect(x, y, w2, h2);
+  brackets(x, y, w2, h2, addr ? (watching ? "rgba(143,199,255,0.5)" : "rgba(124,249,165,0.55)") : "rgba(120,140,160,0.35)", 9);
+
+  g.font = "900 9px Arial Black"; g.fillStyle = "#57717f";
+  g.fillText(addr ? (watching ? "WATCHING" : "SIGNED IN AS") : "NO WALLET LINKED", x + 12, y + 18);
+
+  if (addr){
+    /* a status dot you can read at a glance, then the address in full-ish */
+    g.fillStyle = watching ? "#8fc7ff" : "#7cf9a5";
+    g.beginPath(); g.arc(x + w2 - 20, y + 15, 4, 0, TAU); g.fill();
+    g.font = "900 15px monospace"; g.fillStyle = "#e6f1ff";
+    g.fillText(addr.slice(0, 12) + "…" + addr.slice(-8), x + 12, y + 40);
+    /* what this wallet actually brings to the op */
+    const nG = nftWeaponIds(window.ownedGunTypes || []).length;
+    const nM = (window.ownedModTypes || []).length;
+    const nK = (window.ownedGearTypes || []).length;
+    g.font = "700 10px Verdana"; g.fillStyle = "#9db4cc";
+    g.fillText(nG + " gun" + (nG === 1 ? "" : "s") + " · " + nM + " mod" + (nM === 1 ? "" : "s")
+      + " · " + nK + "/8 gear" + (hasHolo() ? " · HOLO +1♥" : ""), x + 12, y + 58);
+    g.font = "700 9px Verdana"; g.fillStyle = watching ? "#8fc7ff" : "#4a6a58";
+    g.fillText(watching ? "view-only — CONNECT to submit scores" : "can sign scores to the world board", x + 12, y + 73);
+  } else {
+    g.font = "700 10px Verdana"; g.fillStyle = "#8a97a8";
+    wrapText2("Link a wallet to carry your guns, mods and gear into every op — or WATCH any address to try them.",
+      x + 12, y + 40, w2 - 24, 13, "#8a97a8", "700 10px Verdana");
+  }
+
+  /* the three actions, always in the same place */
+  const bw = (w2 - 34) / 3, by2 = y + h2 - 34;
+  if (addr){
+    btn(x + 12, by2, bw, 26, walletBusy ? "…" : "SWITCH", () => switchWallet(), { fs: 10 });
+    btn(x + 17 + bw, by2, bw, 26, "WATCH", () => enterAddress(), { fs: 10 });
+    btn(x + 22 + bw * 2, by2, bw, 26, "UNLINK", () => disconnectWallet(), { fs: 10, danger: true });
+  } else {
+    btn(x + 12, by2, bw * 1.5 + 5, 26, walletBusy ? "…" : "CONNECT", () => connectWallet(), { fs: 10 });
+    btn(x + 22 + bw * 1.5, by2, bw * 1.5 - 5, 26, "👁 WATCH", () => enterAddress(), { fs: 10 });
+  }
+  /* the live status line, under the panel, where it cannot collide */
+  if (walletStatus){
+    g.font = "700 9px Verdana"; g.textAlign = "right";
+    g.fillStyle = /error|fail|cancel|no wallet|locked/i.test(walletStatus) ? "#ff8f8f" : "#4a6a58";
+    g.fillText(walletStatus.slice(0, 72), x + w2, y + h2 + 14);
+    g.textAlign = "left";
+  }
 }
