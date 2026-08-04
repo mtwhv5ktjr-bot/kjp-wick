@@ -22,6 +22,17 @@ const GEAR_ANCHOR = {
   8: { x: 56,  y: 84,  side: "r", label: "HAND"   }
 };
 let RR_hover = 0;
+/* Canvas has no anchors, so "mint at …" was just text nobody could click.
+   Open in a new tab, but fall back to same-tab if a popup blocker eats it —
+   a dead buy button is worse than losing the game tab. */
+const MINT_URL = "https://kjp-game.wick.pics/mint";
+const ARSENAL_URL = "https://mint.wick.pics";
+function openShop(url){
+  try{
+    const w = window.open(url, "_blank", "noopener");
+    if (!w || w.closed) location.href = url;
+  }catch(e){ location.href = url; }
+}
 
 function drawReadyRoom(){
   UIB = [];
@@ -89,8 +100,10 @@ function drawReadyRoom(){
     if (has){ g.fillStyle = "#7cf9a5"; g.fillText("ARMED", bx + bw - 44, by + 15); }
     else {
       g.fillStyle = "#4e5c68"; g.fillText(d.pool + " OF 100", bx + bw - 56, by + 15);
-      g.fillStyle = "#57717f"; g.font = "700 8px Verdana";
-      g.fillText("not owned — mint at kjp-game.wick.pics/mint", bx + 10, by + bh - 6);
+      /* the whole ghosted box is the buy button */
+      g.fillStyle = hot ? "#ffd27c" : "#6a7a88"; g.font = "900 8px Arial Black";
+      g.fillText(hot ? "▸ CLICK TO MINT THIS" : "NOT OWNED — CLICK TO MINT", bx + 10, by + bh - 7);
+      UIB.push({ x: bx, y: by, w: bw, h: bh, cb: () => openShop(MINT_URL) });
     }
   };
   L.forEach((t, i) => place(t, i, "l"));
@@ -140,11 +153,23 @@ function drawReadyRoom(){
     gx += bw + 8;
   }
 
-  btn(60, H - 62, 150, 40, "▶ INFILTRATE", () => { STATE = "select"; }, { fs: 13 });
-  btn(220, H - 62, 130, 40, walletBusy ? "…" : "↻ REFRESH", () => refreshGear(), { fs: 12 });
-  btn(360, H - 62, 130, 40, "🔫 ARSENAL", () => { STATE = "arsenal"; }, { fs: 12 });
+  /* ---- the shop row. The missing piece was simply a way to BUY from here ---- */
+  const missing = 8 - owned.length;
+  btn(60, H - 62, 148, 40, "▶ INFILTRATE", () => { STATE = "select"; }, { fs: 13 });
+  /* gold = the paid drop, and it says what is still unowned so the ask is concrete */
+  const buyLabel = missing ? "🛒 GET GEAR — " + missing + " MISSING ↗" : "🛒 GEAR MINT ↗";
+  const buyHot = btn(216, H - 62, 236, 40, buyLabel, () => openShop(MINT_URL), { fs: 12 });
+  btn(460, H - 62, 200, 40, "🔫 GUNS + MODS ↗", () => openShop(ARSENAL_URL), { fs: 12 });
+  btn(668, H - 62, 120, 40, walletBusy ? "…" : "↻ REFRESH", () => refreshGear(), { fs: 12 });
+  btn(796, H - 62, 130, 40, "ARSENAL", () => { STATE = "arsenal"; }, { fs: 12 });
   btn(W - 190, H - 62, 120, 40, "← BACK", () => { STATE = "title"; });
-  g.font = "700 10px Verdana"; g.fillStyle = walletAddr || window.watchAddr ? "#7cf9a5" : "#57717f";
-  g.fillText(walletStatus || "no wallet linked", 500, H - 38);
+  /* one line of plain economics under the buy button — and the wallet line
+     lives up by the title, where it cannot collide with it */
+  g.font = "700 9px Verdana"; g.fillStyle = buyHot ? "#ffd27c" : "#57717f";
+  g.fillText("1,000,000 PLS · 50% burns KJP · 50% burns WICK", 216, H - 70);
+  g.font = "700 10px Verdana"; g.textAlign = "right";
+  g.fillStyle = walletAddr || window.watchAddr ? "#7cf9a5" : "#57717f";
+  g.fillText(walletStatus || "no wallet linked", W - 60, 58);
+  g.textAlign = "left";
   dispatchClicks();
 }
