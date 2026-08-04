@@ -32,7 +32,9 @@ const rr = (a, b) => a + rnd() * (b - a);
 /* ---------- input ---------- */
 const KEYS = new Set(), PRESS = new Set();
 const MOUSE = { x: W / 2, y: H / 2, down: false, pressed: false, moved: 0 };
-const IS_TOUCH = matchMedia("(pointer:coarse)").matches;
+/* ?touch=1 forces the phone HUD on a desktop so the thumb layout can actually
+   be reviewed (and screenshotted) without a device in hand. */
+const IS_TOUCH = matchMedia("(pointer:coarse)").matches || /[?&]touch=1/.test(location.search);
 function cvPos(e){
   const r = cv.getBoundingClientRect();
   return { x: (e.clientX - r.left) / VIEW_SCALE, y: (e.clientY - r.top) / VIEW_SCALE };
@@ -58,16 +60,27 @@ const TOUCH = {
   stick: null,            // {id, ox, oy, dx, dy}  ox/oy = where the finger landed
   aim: null,              // {id, x, y}            current aim finger position
   fire: false, act: false, knock: false, run: false, wpn: false, sneakTgl: false,
+  use: false, gadget: false, focus: false,
   btns: []                // filled per-frame by layout(): {id,label,x,y,r,on}
 };
+/* DATA-DRIVEN so adding a verb can never silently mis-route: each button
+   declares how it behaves — `hold` sets a TOUCH flag while pressed, `toggle`
+   flips one, `key` fires a one-shot PRESS the keyboard path already handles.
+   (The old ternary chain fell through to "wpn" for anything new.)
+   Laid out and collision-checked for a 375px phone in landscape. */
 const BTN_DEFS = [
-  { k: "fire",  label: "FIRE",  x: W - 88,  y: H - 88,  r: 52 },
-  { k: "act",   label: "ACT",   x: W - 196, y: H - 148, r: 40 },
-  { k: "knock", label: "KNOCK", x: W - 88,  y: H - 208, r: 34 },
-  { k: "run",   label: "RUN",   x: W - 286, y: H - 66,  r: 36 },
-  { k: "sneak", label: "SNEAK", x: W - 190, y: H - 52,  r: 34 },
-  { k: "wpn",   label: "WPN",   x: W - 60,  y: H - 300, r: 28 }
+  { k: "fire",   label: "FIRE",   x: W - 88,  y: H - 88,  r: 52, hold: "fire" },
+  { k: "act",    label: "ACT",    x: W - 196, y: H - 150, r: 42, hold: "act", key: "KeyE" },
+  { k: "use",    label: "USE",    x: W - 96,  y: H - 198, r: 38, key: "KeyV" },
+  { k: "knock",  label: "KNOCK",  x: W - 190, y: H - 238, r: 32, key: "KeyF" },
+  { k: "gadget", label: "GEAR",   x: W - 128, y: H - 268, r: 28, key: "KeyG" },
+  { k: "wpn",    label: "WPN",    x: W - 58,  y: H - 268, r: 28, key: "KeyQ" },
+  { k: "run",    label: "RUN",    x: W - 286, y: H - 70,  r: 34, hold: "run" },
+  { k: "sneak",  label: "SNEAK",  x: W - 196, y: H - 56,  r: 34, toggle: "sneakTgl" },
+  { k: "focus",  label: "FOCUS",  x: W - 286, y: H - 146, r: 28, hold: "focus" }
 ];
+const BTN_BY_K = {};
+for (const b of BTN_DEFS) BTN_BY_K[b.k] = b;
 const touchPts = new Map();
 function touchBtnAt(x, y){
   for (const b of BTN_DEFS) if (dist(x, y, b.x, b.y) < b.r + 12) return b.k;
@@ -80,11 +93,10 @@ cv.addEventListener("pointerdown", e => {
   touchPts.set(e.pointerId, p);
   const b = touchBtnAt(p.x, p.y);
   if (b){
-    if (b === "sneak") TOUCH.sneakTgl = !TOUCH.sneakTgl;
-    else TOUCH[b === "fire" ? "fire" : b === "act" ? "act" : b === "knock" ? "knock" : b === "run" ? "run" : "wpn"] = true;
-    if (b === "act") PRESS.add("KeyE");
-    if (b === "knock") PRESS.add("KeyF");
-    if (b === "wpn") PRESS.add("KeyQ");
+    const d = BTN_BY_K[b];
+    if (d.toggle) TOUCH[d.toggle] = !TOUCH[d.toggle];
+    if (d.hold) TOUCH[d.hold] = true;
+    if (d.key) PRESS.add(d.key);
     touchPts.get(e.pointerId).btn = b;
     return;
   }
@@ -107,7 +119,7 @@ cv.addEventListener("pointermove", e => {
 function touchEnd(e){
   if (e.pointerType === "mouse") return;
   const t = touchPts.get(e.pointerId);
-  if (t && t.btn && t.btn !== "sneak") TOUCH[t.btn === "fire" ? "fire" : t.btn === "act" ? "act" : t.btn === "knock" ? "knock" : t.btn === "run" ? "run" : "wpn"] = false;
+  if (t && t.btn){ const d = BTN_BY_K[t.btn]; if (d && d.hold) TOUCH[d.hold] = false; }
   if (TOUCH.stick && TOUCH.stick.id === e.pointerId) TOUCH.stick = null;
   if (TOUCH.aim && TOUCH.aim.id === e.pointerId) TOUCH.aim = null;
   touchPts.delete(e.pointerId);

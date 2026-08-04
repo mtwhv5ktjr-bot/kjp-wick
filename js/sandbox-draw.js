@@ -191,8 +191,10 @@ function drawSandboxHUD(){
       g.font = "900 9px Arial Black"; g.fillStyle = "#ff8f8f"; g.fillText("SUSPICIOUS", dx + 132, dy + 13);
     }
   }
-  /* --- GADGET BELT --- */
-  const gx = 26, gy = H - 148;
+  /* --- GADGET BELT ---
+     On touch the floating stick owns the lower-left, so the belt moves up out
+     of the thumb's way; the GEAR button on the right does the cycling there. */
+  const gx = 26, gy = IS_TOUCH ? H - 300 : H - 148;
   P.gads.forEach((id, i) => {
     const G = GADGETS[id], n = P.gadN[id] | 0, sel = i === P.gi;
     const x = gx + i * 46;

@@ -1512,14 +1512,27 @@ function drawTouchUI(){
     g.beginPath(); g.arc(150, H - 150, 58, 0, TAU); g.stroke();
   }
   for (const b of BTN_DEFS){
-    const on = b.k === "sneak" ? TOUCH.sneakTgl : TOUCH[b.k === "fire" ? "fire" : b.k];
+    const on = b.toggle ? TOUCH[b.toggle] : b.hold ? TOUCH[b.hold] : false;
+    /* a gadget button with nothing left in the tube should look empty */
+    const gadEmpty = b.k === "use" && P && P.gads && (P.gadN[P.gads[P.gi]] | 0) <= 0;
+    g.globalAlpha = gadEmpty ? 0.4 : 1;
     g.fillStyle = on ? "rgba(124,249,165,0.3)" : "rgba(16,28,23,0.55)";
     g.beginPath(); g.arc(b.x, b.y, b.r, 0, TAU); g.fill();
     g.strokeStyle = on ? "rgba(124,249,165,0.75)" : "rgba(124,249,165,0.25)"; g.lineWidth = 2;
     g.beginPath(); g.arc(b.x, b.y, b.r, 0, TAU); g.stroke();
-    g.font = "900 " + (b.r > 40 ? 15 : 11) + "px Arial Black"; g.textAlign = "center";
-    g.fillStyle = on ? "#0a1410" : "#9fd7b0";
-    g.fillText(b.label, b.x, b.y + 5); g.textAlign = "left";
+    g.textAlign = "center";
+    /* GEAR shows the selected gadget's icon so the belt is readable at a glance */
+    if (b.k === "gadget" && P && P.gads && typeof GADGETS !== "undefined"){
+      g.font = "15px serif"; g.fillStyle = "#e6f1ff";
+      g.fillText(GADGETS[P.gads[P.gi]].ic, b.x, b.y + 2);
+      g.font = "900 7px Arial Black"; g.fillStyle = "#9fd7b0";
+      g.fillText("GEAR", b.x, b.y + 15);
+    } else {
+      g.font = "900 " + (b.r > 40 ? 15 : 11) + "px Arial Black";
+      g.fillStyle = on ? "#0a1410" : "#9fd7b0";
+      g.fillText(b.label, b.x, b.y + 5);
+    }
+    g.textAlign = "left"; g.globalAlpha = 1;
   }
 }
 

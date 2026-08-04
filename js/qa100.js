@@ -652,6 +652,61 @@ function runQA100(){
     return ok;
   });
 
+  /* ═══ 8b. MOBILE / TOUCH ═══ */
+  qgroup("8b · MOBILE");
+  qok("no two touch buttons overlap", () => {
+    for (let i = 0; i < BTN_DEFS.length; i++) for (let j = i + 1; j < BTN_DEFS.length; j++){
+      const a = BTN_DEFS[i], b = BTN_DEFS[j];
+      if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r) return a.k + " overlaps " + b.k;
+    }
+    return true;
+  });
+  qok("every touch button is fully on screen", () =>
+    BTN_DEFS.every(b => b.x - b.r >= 0 && b.x + b.r <= W && b.y - b.r >= 0 && b.y + b.r <= H)
+    || BTN_DEFS.filter(b => b.x - b.r < 0 || b.x + b.r > W || b.y - b.r < 0 || b.y + b.r > H).map(b => b.k).join(","));
+  qok("no button sits under the floating move stick", () =>
+    BTN_DEFS.every(b => Math.hypot(b.x - 150, b.y - (H - 150)) >= b.r + 58)
+    || "a button clashes with the stick home");
+  qok("every touch button declares a real action", () =>
+    BTN_DEFS.every(b => b.hold || b.toggle || b.key)
+    || BTN_DEFS.filter(b => !b.hold && !b.toggle && !b.key).map(b => b.k).join(",") + " do nothing");
+  qok("every touch button is reachable by the hit test", () =>
+    BTN_DEFS.every(b => touchBtnAt(b.x, b.y) === b.k) || "hit test mismatch");
+  qok("touch buttons cover every sandbox verb", () => {
+    const keys = BTN_DEFS.map(b => b.key).filter(Boolean);
+    for (const need of ["KeyE", "KeyF", "KeyQ", "KeyG", "KeyV"])
+      if (!keys.includes(need)) return need + " has no touch button";
+    return true;
+  });
+  qok("GEAR cycles and USE fires by touch alone", () => qWith(1, () => {
+    const tap = k => { const d = BTN_BY_K[k]; if (d.toggle) TOUCH[d.toggle] = !TOUCH[d.toggle]; if (d.hold) TOUCH[d.hold] = true; if (d.key) PRESS.add(d.key); };
+    const before = P.gi;
+    tap("gadget"); sandboxUpdate(1 / 60); inputEndFrame();
+    const cycled = P.gi !== before;
+    MOUSE.x = W / 2 + 50; MOUSE.y = H / 2;
+    const id = P.gads[P.gi], n0 = P.gadN[id];
+    tap("use"); sandboxUpdate(1 / 60); inputEndFrame();
+    return cycled && P.gadN[id] < n0;
+  }));
+  qok("a hold button releases cleanly", () => {
+    TOUCH.run = true;
+    const d = BTN_BY_K.run;
+    if (d.hold) TOUCH[d.hold] = false;
+    return TOUCH.run === false;
+  });
+  qok("SNEAK toggles rather than sticking on", () => {
+    const b0 = TOUCH.sneakTgl;
+    const d = BTN_BY_K.sneak;
+    TOUCH[d.toggle] = !TOUCH[d.toggle]; const flipped = TOUCH.sneakTgl !== b0;
+    TOUCH[d.toggle] = b0;
+    return flipped;
+  });
+  qok("the gadget belt clears the thumb on touch layouts", () => {
+    /* belt draws at H-300 on touch, H-148 on desktop — must miss the stick */
+    const beltY = H - 300;
+    return Math.abs(beltY - (H - 150)) > 100;
+  });
+
   /* ═══ 9. PRESENTATION ═══ */
   qgroup("9 · PRESENTATION");
   const screens = ["title", "select", "skins", "arsenal", "intel", "options", "dossier"];

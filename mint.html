@@ -46,6 +46,39 @@
   #msg.bad{color:#ff8f8f}#msg.good{color:#7cf9a5}
   footer{margin-top:40px;padding-top:18px;border-top:1px solid #1c2630;color:#57717f;font-size:12px}
   .warn{border-color:#5a3a1a;background:rgba(255,157,91,.06);color:#ffc59d}
+
+  /* ---------- PHONES ----------
+     Most of this mint will happen inside a wallet browser on a 390px screen.
+     The stat row stops being a row, every control becomes a full-width 52px
+     tap target, and the card grid drops to two-up (still readable, still
+     scannable) instead of one giant column you scroll for a minute. */
+  html{-webkit-text-size-adjust:100%}
+  @media (max-width:760px){
+    .wrap{padding:20px 14px 64px}
+    header{gap:6px}
+    h1{font-size:31px;letter-spacing:-.5px}
+    .sub{font-size:12px}
+    .pledge{padding:14px;font-size:13px;line-height:1.55}
+    .box{padding:16px}
+    .box .row{flex-direction:column;align-items:stretch;gap:14px}
+    .box .row .row{flex-direction:row;align-items:center}
+    .stat{font-size:26px}
+    input[type=number]{flex:0 0 84px;height:52px;font-size:19px}
+    button{flex:1 1 0;min-height:52px;padding:14px 12px;font-size:14px}
+    .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+    .card{padding:10px}
+    .card h3{font-size:12px}
+    .card p{font-size:11px;line-height:1.45}
+    .card .r{font-size:9px}
+    .card .pool{font-size:10px}
+    h2{font-size:16px!important}
+    footer{font-size:11px;word-break:break-word}
+    #addr{word-break:break-all}
+  }
+  @media (max-width:380px){
+    .grid{grid-template-columns:1fr}    /* below this two-up cards stop being legible */
+    h1{font-size:27px}
+  }
 </style>
 </head><body><div class="wrap">
 
