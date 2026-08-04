@@ -50,6 +50,25 @@ const provider = new ethers.JsonRpcProvider(RPC, new ethers.Network("pulsechain"
 const wallet = new ethers.Wallet(process.env.PK, provider);
 console.log("\ndeployer " + wallet.address + "  bal " + ethers.formatEther(await provider.getBalance(wallet.address)) + " PLS");
 
+/* --market <gearAddr> : deploy the secondary market against a live gear
+   contract. Separate step on purpose — the mint must exist first, and a
+   market is not needed on day one. */
+const mktIdx = process.argv.indexOf("--market");
+if (mktIdx >= 0){
+  const gearAddr = process.argv[mktIdx + 1];
+  if (!/^0x[a-fA-F0-9]{40}$/.test(gearAddr || "")){ console.error("✗ --market needs the deployed KJPGear address"); process.exit(1); }
+  const mArt = JSON.parse(readFileSync(join(root, "out", "KJPGearMarket.json"), "utf8"));
+  const f = new ethers.ContractFactory(mArt.abi, mArt.bytecode, wallet);
+  const c = await f.deploy(gearAddr, BURN_ROUTER, WPLS, KJP_TOKEN, WICK_TOKEN);
+  console.log("deploying market… " + c.deploymentTransaction().hash);
+  await c.waitForDeployment();
+  const addr = await c.getAddress();
+  console.log("\n✓ KJP GEAR MARKET live at " + addr);
+  console.log("  15% royalty on every sale, burned 50/50 KJP + WICK");
+  console.log("  paste into wick-arsenal/web/config.js  gearMarket, then sync the arsenal port");
+  process.exit(0);
+}
+
 if (openIdx >= 0){
   const addr = process.argv[openIdx + 1];
   if (!/^0x[a-fA-F0-9]{40}$/.test(addr || "")){ console.error("✗ --open needs the contract address"); process.exit(1); }

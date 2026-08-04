@@ -17,7 +17,7 @@ catch {
   }
 }
 
-const files = ["KJPGear.sol", "TestMocksGear.sol"];
+const files = ["KJPGear.sol", "KJPGearMarket.sol", "TestMocksGear.sol"];
 const sources = {};
 for (const f of files) sources[f] = { content: readFileSync(join(root, "contracts", f), "utf8") };
 
