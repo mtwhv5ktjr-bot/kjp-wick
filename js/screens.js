@@ -209,11 +209,17 @@ function drawTitle(){
   btn(bx, by + 3 * (bh + gap), bw / 2 - 5, bh, "🎒 READY ROOM", () => { STATE = "ready"; }, { fs: 12 });
   btn(bx + bw / 2 + 5, by + 3 * (bh + gap), bw / 2 - 5, bh, "📼 INTEL", () => { STATE = "intel"; }, { fs: 13 });
   /* the reason to come back tomorrow */
-  const dRun = dailyBest() > 0;
-  btn(bx, by + 4 * (bh + gap), bw, bh, (dRun ? "📅 DAILY — BEST " + dailyBest().toLocaleString() : "📅 DAILY CONTRACT"),
-      () => startDaily(), { fs: 13 });
+  /* the two reasons to come back: one contract a day, and how deep you got.
+     Split across one row so the menu keeps its height. */
+  const r4 = by + 4 * (bh + gap);
+  btn(bx, r4, bw / 2 - 5, bh, dailyBest() > 0 ? "📅 DAILY — " + dailyBest().toLocaleString() : "📅 DAILY CONTRACT",
+      () => startDaily(), { fs: 12 });
+  btn(bx + bw / 2 + 5, r4, bw / 2 - 5, bh, deepBest() > 0 ? "🕳 DEEP COVER — D" + deepBest() : "🕳 DEEP COVER",
+      () => startDeep(), { fs: 12 });
   g.font = "700 9px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
-  g.fillText(dailyLabel() + "  ·  resets in " + fmtLeft(dailyLeft()), bx + bw / 2, by + 4 * (bh + gap) + bh + 13);
+  /* short enough to stay on canvas when centred — the merged version ran off
+     the left edge to x=-41 */
+  g.fillText(dailyLabel() + " · resets in " + fmtLeft(dailyLeft()), bx + bw / 2, r4 + bh + 13);
   g.textAlign = "left";
   /* difficulty is a first-class fact on the front page, not a buried setting */
   const d = diff();
@@ -223,7 +229,9 @@ function drawTitle(){
   g.fillText("score ×" + d.scoreMul + " · " + d.blurb, bx + 150, by + 4 * (bh + gap) + 8);
   /* wallet line */
   g.font = "700 11px Verdana"; g.fillStyle = walletAddr ? "#7cf9a5" : "#7c8ba3";
-  g.fillText(walletStatus || (walletAddr ? "connected" : "wallet: not connected — ARSENAL to link your WICK guns + gear"), bx, by + 4 * (bh + gap) + 26);
+  /* pinned near the bottom: the menu grew a fifth row (DAILY / DEEP COVER)
+     and this used to sit inside it — the audit caught it at 81% */
+  g.fillText(walletStatus || (walletAddr ? "connected" : "wallet: not connected — ARSENAL to link your WICK guns + gear"), bx, H - 34);
   /* board */
   drawTitleBoard();
   g.font = "700 11px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
@@ -504,6 +512,9 @@ function computeResult(){
 }
 function finishLevel(){
   const r = computeResult();
+  /* DEEP COVER has no debrief between floors — the run is the unit. Clearing
+     a floor drops you into the next one immediately. */
+  if (DEEP.on){ deepAdvance(r); return; }
   /* Snapshot the previous best time BEFORE anything below mutates PROG —
      the debrief compares against it, and by the time it draws, PROG already
      holds this run. Read it late and "NEW BEST" can never fire. */
