@@ -835,6 +835,13 @@ function lightPolyFor(L, r){
   if (L._poly && L._polyV === _geomV && L._polyR === r) return L._poly;
   L._poly = shadowPoly(L.x, L.y, r, 72);
   L._polyV = _geomV; L._polyR = r;
+  /* How boxed-in this fixture is, 0 open room .. 1 almost fully walled.
+     Used to weight the volumetric shaft: a beam squeezing through a doorway
+     is far more visible in air than an unobstructed ceiling pool, so the
+     effect lands where it actually reads instead of hazing the whole level. */
+  let s = 0;
+  for (const [px, py] of L._poly) s += Math.hypot(px - L.x, py - L.y) / r;
+  L._occ = 1 - s / L._poly.length;
   return L._poly;
 }
 let _pPoly = null, _pPx = -1e9, _pPy = -1e9, _pPolyV = -1;
@@ -1231,6 +1238,32 @@ function drawGame(){
   g.drawImage(GLOW2, 0, 0, W, H);
   g.globalAlpha = 1;
   g.restore();
+  /* VOLUMETRIC SHAFTS — light in the AIR, not just on the floor.
+     Drawn after the darkness multiply so a beam reads as something hanging in
+     the room rather than as a brighter patch of floor, and weighted by how
+     boxed-in the fixture is: an open ceiling pool contributes almost nothing,
+     a beam squeezed through a doorway is unmistakable. The shadow polygon
+     already IS the beam shape — this is the payoff for having built it. */
+  g.save(); g.translate(-Math.round(camX), -Math.round(camY));
+  g.globalCompositeOperation = "lighter";
+  for (const L of LIGHTS){
+    if (L.dead || !L._poly || !vis(L)) continue;
+    const occ = L._occ || 0;
+    if (occ < 0.12) continue;                      // wide open — no visible beam
+    const a = Math.min(0.16, 0.03 + occ * 0.20) * (L.inten || 1);
+    const base = L.col || (L.warm ? "rgba(255,214,150," : "rgba(190,220,255,");
+    g.save();
+    g.beginPath(); _tracePoly(g, L._poly); g.clip();
+    _fixtureXform(g, L.x, L.y, L.ar, L.rot);
+    const gr = g.createRadialGradient(L.x, L.y, L.r * 0.05, L.x, L.y, L.r);
+    gr.addColorStop(0, base + a + ")");
+    gr.addColorStop(0.55, base + (a * 0.45) + ")");
+    gr.addColorStop(1, base + "0)");
+    g.fillStyle = gr; g.beginPath(); g.arc(L.x, L.y, L.r, 0, TAU); g.fill();
+    g.restore();
+  }
+  g.restore();
+
   drawThermal();                                   // silhouettes punch through the dark
 
   /* cone tints above the dark — crisp, state-colored, always readable */
