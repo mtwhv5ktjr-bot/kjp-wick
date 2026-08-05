@@ -281,16 +281,32 @@ $("connectBtn").onclick = async () => {
   try{
     const a = await window.ethereum.request({ method:"eth_requestAccounts" });
     acct = a[0];
-    const cid = await window.ethereum.request({ method:"eth_chainId" });
-    if (parseInt(cid, 16) !== CHAIN_ID){
-      try{ await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{ chainId:"0x171" }] }); }
-      catch{ say("Switch your wallet to PulseChain (369).", "bad"); return; }
-    }
+    if (!(await ensureChain())){ say("Switch your wallet to PulseChain (chain 369) — that is where your PLS is.", "bad"); return; }
     $("connectBtn").textContent = acct.slice(0,6) + "…" + acct.slice(-4);
-    say("connected", "good");
+    /* say the balance out loud on connect: someone holding 138 PLS should
+       learn a mint costs 1,000,000 here, not from a wallet error later */
+    let bal = 0n;
+    try { bal = BigInt(await rpc("eth_getBalance", [acct, "latest"])); } catch(e){}
+    const need = priceWei;
+    say(bal >= need ? "connected · " + fmtPls(bal) + " PLS"
+                    : "connected · " + fmtPls(bal) + " PLS — a mint costs " + fmtPls(need) + " PLS plus gas",
+        bal >= need ? "good" : "bad");
     refresh();
   }catch(e){ say("connect cancelled", "bad"); }
 };
+
+/* Verify the wallet is ON PulseChain, and re-read the chain AFTER any switch
+   rather than trusting the switch call to have worked. Wallets can resolve
+   wallet_switchEthereumChain without actually being on the new chain yet. */
+async function ensureChain(){
+  const cid = await window.ethereum.request({ method: "eth_chainId" });
+  if (parseInt(cid, 16) === CHAIN_ID) return true;
+  try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x171" }] }); }
+  catch { return false; }
+  const after = await window.ethereum.request({ method: "eth_chainId" });
+  return parseInt(after, 16) === CHAIN_ID;
+}
+const fmtPls = wei => (Number(wei / 10n ** 15n) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
 $("mintBtn").onclick = async () => {
   if (!acct || !LIVE) return;
@@ -298,6 +314,25 @@ $("mintBtn").onclick = async () => {
   const value = priceWei * BigInt(qty);
   const data = "0xa0712d68" + qty.toString(16).padStart(64, "0");    // mint(uint256)
   try{
+    /* The chain used to be checked only at connect. Switch networks after
+       connecting — or come back to an already-connected tab — and the mint was
+       sent on whatever chain happened to be current, where the balance is ~0.
+       The wallet then says "insufficient funds" while the PLS sits safely on
+       PulseChain, which is exactly what it looks like from the user's side. */
+    if (!(await ensureChain())){
+      say("Your wallet is not on PulseChain. Switch to PulseChain (chain 369) and try again — your PLS is on PulseChain, not on the chain you are connected to.", "bad");
+      return;
+    }
+    /* Tell them what is actually wrong BEFORE the wallet says a generic
+       "insufficient funds" that never mentions the price. */
+    let bal = 0n;
+    try { bal = BigInt(await rpc("eth_getBalance", [acct, "latest"])); } catch(e){}
+    if (bal > 0n && bal < value){
+      say("Not enough PLS. " + qty + " piece" + (qty > 1 ? "s" : "") + " costs " + fmtPls(value)
+        + " PLS plus gas, and this wallet holds " + fmtPls(bal) + " PLS on PulseChain."
+        + (qty > 1 ? " Try minting 1." : ""), "bad");
+      return;
+    }
     say("confirm in your wallet…");
     const tx = await window.ethereum.request({ method:"eth_sendTransaction", params:[{
       from: acct, to: GEAR_ADDR, value: "0x" + value.toString(16), data }] });
