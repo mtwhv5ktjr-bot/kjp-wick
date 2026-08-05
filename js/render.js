@@ -759,16 +759,59 @@ function lmCone(e, range, fov, pts){
   lmg.closePath(); lmg.fill();
   lmg.restore(); lmg.globalCompositeOperation = "source-over";
 }
-function lmLight(x, y, r, a){
+/* ---- SHADOW CASTING ----
+   Lights used to punch a plain circle into the lightmap, so a lamp lit you
+   THROUGH solid wall and every room bled into its neighbours. Guard cones were
+   already clipped to a visibility polygon; lights now use the same idea over
+   the full circle, so walls throw real shadows.
+
+   This is affordable because static lights never move: the polygon is computed
+   once and kept until the geometry actually changes. The only thing that can
+   change it is a door crossing the open/closed threshold, so the cache is
+   keyed on a cheap hash of every door's state. */
+let _geomV = 0;
+function geomVersion(){
+  let v = 1;
+  for (const d of (LV.doors || [])) v = (v * 31 + ((d.broken || d.open >= 0.5) ? 1 : 0)) | 0;
+  return v;
+}
+function shadowPoly(x, y, r, steps){
+  const pts = [];
+  for (let i = 0; i <= steps; i++){
+    const a = i / steps * TAU;
+    const d = ray(x, y, a, r);
+    pts.push([x + Math.cos(a) * d, y + Math.sin(a) * d]);
+  }
+  return pts;
+}
+function lightPolyFor(L, r){
+  if (L._poly && L._polyV === _geomV && L._polyR === r) return L._poly;
+  L._poly = shadowPoly(L.x, L.y, r, 72);
+  L._polyV = _geomV; L._polyR = r;
+  return L._poly;
+}
+let _pPoly = null, _pPx = -1e9, _pPy = -1e9, _pPolyV = -1;
+function _tracePoly(c, pts){
+  c.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+  c.closePath();
+}
+function lmLight(x, y, r, a, pts){
   lmg.save(); lmg.scale(0.5, 0.5); lmg.translate(-camX, -camY);
   const gr = lmg.createRadialGradient(x, y, r * 0.12, x, y, r);
   gr.addColorStop(0, "rgba(255,255,255," + a + ")"); gr.addColorStop(1, "rgba(255,255,255,0)");
   lmg.globalCompositeOperation = "destination-out";
-  lmg.fillStyle = gr; lmg.beginPath(); lmg.arc(x, y, r, 0, TAU); lmg.fill();
+  lmg.fillStyle = gr; lmg.beginPath();
+  if (pts) _tracePoly(lmg, pts); else lmg.arc(x, y, r, 0, TAU);
+  lmg.fill();
   lmg.restore(); lmg.globalCompositeOperation = "source-over";
 }
-function glowBlob(x, y, r, col){
+function glowBlob(x, y, r, col, pts){
   glg.save(); glg.scale(0.25, 0.25); glg.translate(-camX, -camY);
+  /* clip the bloom to the same shadow polygon — a lamp that is hidden behind a
+     wall must not halo through it, which is the tell that gives away a fake
+     lighting model even when the lightmap itself is correct */
+  if (pts){ glg.beginPath(); _tracePoly(glg, pts); glg.clip(); }
   const gr = glg.createRadialGradient(x, y, 1, x, y, r);
   gr.addColorStop(0, col + "0.8)"); gr.addColorStop(1, col + "0)");
   glg.fillStyle = gr; glg.beginPath(); glg.arc(x, y, r, 0, TAU); glg.fill();
@@ -790,6 +833,7 @@ function drawGame(){
 
   /* reset light layers */
   lmg.setTransform(1, 0, 0, 1, 0, 0);
+  _geomV = geomVersion();          // doors are the only thing that reshapes shadows
   lmg.clearRect(0, 0, LM.width, LM.height);
   lmg.fillStyle = "rgba(4,8,16," + th.ambient + ")";
   lmg.fillRect(0, 0, LM.width, LM.height);
@@ -819,8 +863,9 @@ function drawGame(){
     let a = L.em ? 0.55 : 0.72;
     if (L.flick && Math.sin(performance.now() / 90 + L.x) > 0.86) a *= 0.4;
     if (L.exit){ const on = LV.hacks >= (LV.def.hacksNeed || 0) && (!LV.def.fileNeed || LV.file) || LV.def.exfil; a = on ? 0.6 : 0.18; }
-    lmLight(L.x, L.y, L.r, a);
-    glowBlob(L.x, L.y, L.r * 0.5, L.col || (L.warm ? th.lampWarm : th.lampCol));
+    const lp = lightPolyFor(L, L.r);
+    lmLight(L.x, L.y, L.r, a, lp);
+    glowBlob(L.x, L.y, L.r * 0.5, L.col || (L.warm ? th.lampWarm : th.lampCol), lp);
   }
   for (const M of MOTES){
     M.a += M.sp * 0.016;
@@ -828,8 +873,15 @@ function drawGame(){
     if (mx < camX || mx > camX + W || my < camY || my > camY + H) continue;
     g.fillStyle = "rgba(255,244,214,0.16)"; g.fillRect(mx, my, M.s, M.s);
   }
-  /* player pool of light */
-  lmLight(P.x, P.y, 250, 0.86);
+  /* player pool of light — this one MOVES, so it cannot use the static cache.
+     Recomputed only when KJP crosses into a new tile: 64 rays at walking pace
+     is a handful of casts a second, and the pool is soft enough that snapping
+     on a tile boundary is invisible. */
+  if (!_pPoly || _pPolyV !== _geomV || Math.hypot(P.x - _pPx, P.y - _pPy) > 4){
+    _pPoly = shadowPoly(P.x, P.y, 250, 64);
+    _pPx = P.x; _pPy = P.y; _pPolyV = _geomV;
+  }
+  lmLight(P.x, P.y, 250, 0.86, _pPoly);
 
   /* glass */
   for (let y = Math.floor(camY / T); y <= Math.floor((camY + H) / T); y++)
