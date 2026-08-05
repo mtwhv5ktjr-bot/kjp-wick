@@ -208,6 +208,13 @@ function drawTitle(){
   btn(bx + bw / 2 + 5, by + 2 * (bh + gap), bw / 2 - 5, bh, "⚙ OPTIONS", () => { STATE = "options"; }, { fs: 13 });
   btn(bx, by + 3 * (bh + gap), bw / 2 - 5, bh, "🎒 READY ROOM", () => { STATE = "ready"; }, { fs: 12 });
   btn(bx + bw / 2 + 5, by + 3 * (bh + gap), bw / 2 - 5, bh, "📼 INTEL", () => { STATE = "intel"; }, { fs: 13 });
+  /* the reason to come back tomorrow */
+  const dRun = dailyBest() > 0;
+  btn(bx, by + 4 * (bh + gap), bw, bh, (dRun ? "📅 DAILY — BEST " + dailyBest().toLocaleString() : "📅 DAILY CONTRACT"),
+      () => startDaily(), { fs: 13 });
+  g.font = "700 9px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
+  g.fillText(dailyLabel() + "  ·  resets in " + fmtLeft(dailyLeft()), bx + bw / 2, by + 4 * (bh + gap) + bh + 13);
+  g.textAlign = "left";
   /* difficulty is a first-class fact on the front page, not a buried setting */
   const d = diff();
   g.font = "900 11px Arial Black"; g.fillStyle = "#ffd27c";
@@ -518,7 +525,9 @@ function finishLevel(){
   c.intel = (c.intel || 0) + r.intel; c.alarms = (c.alarms || 0) + r.alarms;
   c.time = (c.time || 0) + r.time;
   saveProg();
-  DB = { n: LV.n, r, t: 0, stampT: 0, prevBest };
+  const wasDaily = DAILY_RUN;
+  if (wasDaily) dailyFinish(r);            // banks the day's best AND restores difficulty
+  DB = { n: LV.n, r, t: 0, stampT: 0, prevBest, daily: wasDaily };
   STATE = "debrief"; musicWant("calm");
 }
 function drawDebrief(dt){
@@ -568,10 +577,14 @@ function drawDebrief(dt){
       if (DB.stampT >= 1 && !DB.thumped){ DB.thumped = true; SFX.stamp(); shake(4); }
       stampRank(W - 320, 250, r.rank, sc2, -0.18);
     }
-    const nxt = DB.n < 6;
-    if (nxt) btn(90, H - 120, 280, 52, "▶ NEXT: " + LEVELS[DB.n + 1].name, () => startBrief(DB.n + 1));
+    /* a daily is one contract, not a campaign step — it must not offer to
+       march you into the next floor, and REPLAY has to re-arm the contract
+       (difficulty and the confiscated piece) rather than start a plain op */
+    const nxt = DB.n < 6 && !DB.daily;
+    if (DB.daily) btn(90, H - 120, 280, 52, "📅 TODAY'S BEST — " + dailyBest().toLocaleString(), () => { STATE = "title"; }, { fs: 12 });
+    else if (nxt) btn(90, H - 120, 280, 52, "▶ NEXT: " + LEVELS[DB.n + 1].name, () => startBrief(DB.n + 1));
     else btn(90, H - 120, 280, 52, "▶ THE VERDICT", () => startOutro());
-    btn(390, H - 120, 170, 52, "↻ REPLAY", () => startBrief(DB.n));
+    btn(390, H - 120, 170, 52, "↻ REPLAY", () => { if (DB.daily) startDaily(); else startBrief(DB.n); });
     btn(580, H - 120, 170, 52, "☰ MENU", () => { STATE = "select"; });
     if (walletAddr) btn(770, H - 120, 260, 52, lbMsg || "📡 SUBMIT CAMPAIGN", () => submitScore(), { fs: 12 });
     btn(1046, H - 120, 174, 52, "🖼 CARD", () => shareCard(r, DB.n), { fs: 12 });

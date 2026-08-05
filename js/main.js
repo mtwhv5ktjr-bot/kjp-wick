@@ -77,6 +77,13 @@ function frame(now, syncOnly){
   /* art dropped into /assets after a level baked → rebake once, seamlessly */
   if (window._artDirty && LV && PRE){ window._artDirty = false; prerenderLevel(); }
 
+  /* Any return to the menus ends an abandoned daily and hands the player their
+     difficulty back. There are several exits — dead, pause, menu, the debrief's
+     own buttons — and missing one would silently leave OPT.diff rewritten to
+     whatever today's contract demanded. One catch-all beats four call sites. */
+  if (typeof DAILY_RUN !== "undefined" && DAILY_RUN
+      && STATE !== "game" && STATE !== "pause" && STATE !== "debrief" && STATE !== "dead") dailyEnd();
+
   if (STATE === "game"){ if (!syncOnly) gameUpdate(dt); drawGame(); drawIntroCard(); }
   else if (STATE === "pause"){ drawGame(); drawPause(); if (PRESS.has("Escape")) STATE = "game"; }
   else if (STATE === "title") drawTitle();

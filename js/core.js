@@ -381,7 +381,10 @@ window.ownedGearTypes = [];
    must be able to leave one in the locker — otherwise buying more gear could
    make you worse at the game, which is a rotten deal for an NFT. */
 const gearStowed = t => ((PROG && PROG.gearOff) || []).includes(t);
-const hasGear = t => (window.ownedGearTypes || []).includes(t) && !gearStowed(t);
+/* the daily contract confiscates one type outright — owning it does not help
+   you today, which is the whole point of everyone running the same contract */
+const gearBanned = t => (typeof DAILY_RUN !== "undefined") && DAILY_RUN && DAILY && DAILY.ban === t;
+const hasGear = t => (window.ownedGearTypes || []).includes(t) && !gearStowed(t) && !gearBanned(t);
 function toggleGear(t){
   PROG.gearOff = PROG.gearOff || [];
   const i = PROG.gearOff.indexOf(t);
@@ -401,7 +404,8 @@ function wSpec(id){
   /* stowed gear is part of the key: two different loadouts must never share a
      cached spec, even though bumpMods() also clears the cache on every toggle */
   const key = id + ":" + (window.ownedModTypes || []).join(",") + "|" + (window.ownedGearTypes || []).join(",")
-            + "|off" + ((PROG && PROG.gearOff) || []).join(",");
+            + "|off" + ((PROG && PROG.gearOff) || []).join(",")
+            + "|ban" + ((typeof DAILY_RUN !== "undefined" && DAILY_RUN && DAILY) ? DAILY.ban : "");
   if (_specCache[key]) return _specCache[key];
   const s = Object.assign({}, base);
   const seen = new Set();
@@ -411,7 +415,7 @@ function wSpec(id){
   }
   const gseen = new Set();
   for (const t of window.ownedGearTypes || []){
-    if (gearStowed(t)) continue;                  // left in the locker — must not touch the gun
+    if (gearStowed(t) || gearBanned(t)) continue;  // in the locker, or confiscated by today's contract
     if (gseen.has(t) || !GEARDEFS[t]) continue;
     gseen.add(t);
     if (GEARDEFS[t].gun) GEARDEFS[t].gun(s);
