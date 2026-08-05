@@ -161,15 +161,62 @@ function prerenderLevel(){
         + (isWall(x - 1, y - 1) ? 1 : 0) + (isWall(x + 1, y - 1) ? 1 : 0) + (isWall(x - 1, y + 1) ? 1 : 0) + (isWall(x + 1, y + 1) ? 1 : 0);
       if (enc >= 5 && hash2(x * 3, y) < 0.8){ want = true; warm = true; r = 120; }
     } else {
-      if (x % 5 === 2 && y % 5 === 2 && hash2(x, y) < 0.7){ want = true; r = 150 + hash2(x, y * 5) * 55; }
-      else if (x % 5 === 0 && y % 5 === 4 && hash2(x * 3, y) < 0.22){ want = true; r = 130; }
+      /* tighter pools than the original 150-205: a stretched fixture covers
+         far more floor, and 62 overlapping ones left nowhere dark to stand */
+      if (x % 5 === 2 && y % 5 === 2 && hash2(x, y) < 0.7){ want = true; r = 118 + hash2(x, y * 5) * 42; }
+      else if (x % 5 === 0 && y % 5 === 4 && hash2(x * 3, y) < 0.22){ want = true; r = 104; }
     }
     if (!want) continue;
-    LIGHTS.push({ x: x * T + T / 2, y: y * T + T / 2, r, warm, flick: hash2(x * 9, y) < 0.08 });
+    /* FIXTURE CHARACTER.
+       The grid above guarantees coverage, but on its own it produced a field of
+       identical round blobs — the lighting read as wallpaper rather than as a
+       building. Real interiors have long ceiling troffers running WITH the
+       room, of varying age and colour temperature. So each fixture gets:
+         · an axis and an aspect, from how the space actually runs here
+         · its own intensity, so pools are not all equally bright
+         · a colour temperature, so a corridor is not one flat cream
+       All derived from the position hash, so a level lights identically every
+       time it is loaded. */
+    const run = (dx, dy) => { let n = 0;
+      for (let i = 1; i <= 5; i++){ if (isWall(x + dx * i, y + dy * i)) break; n++; }
+      for (let i = 1; i <= 5; i++){ if (isWall(x - dx * i, y - dy * i)) break; n++; }
+      return n; };
+    const rh = run(1, 0), rv = run(0, 1);
+    const long = Math.abs(rh - rv);
+    const ar = th.outdoor ? 1 : 1 + Math.min(1.3, long * 0.22);      // outdoor lamps stay round
+    const rot = rh >= rv ? 0 : Math.PI / 2;
+    const h1 = hash2(x * 13, y * 7);
+    /* wider spread than before, and it reaches 1.0: pools that are all the
+       same middling brightness average out to fog. Contrast is the whole
+       point — some fixtures should be bright enough to be worth avoiding. */
+    const inten = 0.55 + h1 * 0.45;
+    /* three temperatures: tired fluorescent green-white, clean white, old amber */
+    const temp = hash2(x * 5, y * 11);
+    const col = th.outdoor ? null
+      : temp < 0.30 ? "rgba(214,236,255,"
+      : temp < 0.72 ? "rgba(255,236,200,"
+      :               "rgba(255,196,120,";
+    LIGHTS.push({ x: x * T + T / 2, y: y * T + T / 2, r, warm, ar, rot, inten, col,
+                  flick: hash2(x * 9, y) < 0.08,
+                  /* a few fixtures are simply out — dark patches are what make
+                     the lit ones read as light instead of as texture */
+                  dead: !th.outdoor && hash2(x * 17, y * 3) < 0.07 });
     const px = x * T + T / 2, py = y * T + T / 2;
-    c.fillStyle = "rgba(0,0,0,0.35)"; c.beginPath(); c.arc(px, py, 7, 0, TAU); c.fill();
-    c.fillStyle = warm ? "#ffd9a0" : "#b8d4ff"; c.beginPath(); c.arc(px, py, 4, 0, TAU); c.fill();
-    c.fillStyle = "rgba(255,255,255,0.75)"; c.beginPath(); c.arc(px, py, 1.8, 0, TAU); c.fill();
+    /* the fixture itself, matching the pool it throws: a long troffer reads as
+       a bar, a point source reads as a bulb. A round dot under a stretched
+       pool is the first thing that looks wrong. */
+    if (ar > 1.4){
+      const L2 = 7 + ar * 5, W2 = 3.4;
+      c.save(); c.translate(px, py); c.rotate(rot);
+      c.fillStyle = "rgba(0,0,0,0.35)"; c.fillRect(-L2 - 1.5, -W2 - 1.5, (L2 + 1.5) * 2, (W2 + 1.5) * 2);
+      c.fillStyle = warm ? "#ffd9a0" : "#b8d4ff"; c.fillRect(-L2, -W2, L2 * 2, W2 * 2);
+      c.fillStyle = "rgba(255,255,255,0.7)"; c.fillRect(-L2 + 2, -1, L2 * 2 - 4, 2);
+      c.restore();
+    } else {
+      c.fillStyle = "rgba(0,0,0,0.35)"; c.beginPath(); c.arc(px, py, 7, 0, TAU); c.fill();
+      c.fillStyle = warm ? "#ffd9a0" : "#b8d4ff"; c.beginPath(); c.arc(px, py, 4, 0, TAU); c.fill();
+      c.fillStyle = "rgba(255,255,255,0.75)"; c.beginPath(); c.arc(px, py, 1.8, 0, TAU); c.fill();
+    }
   }
   for (const tmn of LV.terms) LIGHTS.push({ x: tmn.x * T + 24, y: tmn.y * T + 24, r: 90, col: "rgba(90,180,255,", em: true });
   for (const f of LV.files) LIGHTS.push({ x: f.x * T + 24, y: f.y * T + 24, r: 95, col: "rgba(255,210,124,", em: true });
@@ -796,22 +843,34 @@ function _tracePoly(c, pts){
   for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
   c.closePath();
 }
-function lmLight(x, y, r, a, pts){
+/* Stretch a light pool along a fixture's axis. The SHADOW polygon stays in
+   world space and is clipped first — only the falloff is stretched, so an
+   elongated troffer still throws correct shadows. */
+function _fixtureXform(c, x, y, ar, rot){
+  if (!ar || ar === 1) return;
+  /* AREA PRESERVING (ar, 1/ar), not (ar, 1/sqrt(ar)). The first version grew
+     each pool by sqrt(ar), so 62 stretched fixtures merged into a grey fog and
+     the blacks disappeared — the level read as milky rather than lit. A
+     troffer should be a NARROW bar of light, not a wider blob. */
+  c.translate(x, y); c.rotate(rot || 0); c.scale(ar, 1 / ar); c.translate(-x, -y);
+}
+function lmLight(x, y, r, a, pts, ar, rot){
   lmg.save(); lmg.scale(0.5, 0.5); lmg.translate(-camX, -camY);
+  if (pts){ lmg.beginPath(); _tracePoly(lmg, pts); lmg.clip(); }
+  _fixtureXform(lmg, x, y, ar, rot);
   const gr = lmg.createRadialGradient(x, y, r * 0.12, x, y, r);
   gr.addColorStop(0, "rgba(255,255,255," + a + ")"); gr.addColorStop(1, "rgba(255,255,255,0)");
   lmg.globalCompositeOperation = "destination-out";
-  lmg.fillStyle = gr; lmg.beginPath();
-  if (pts) _tracePoly(lmg, pts); else lmg.arc(x, y, r, 0, TAU);
-  lmg.fill();
+  lmg.fillStyle = gr; lmg.beginPath(); lmg.arc(x, y, r, 0, TAU); lmg.fill();
   lmg.restore(); lmg.globalCompositeOperation = "source-over";
 }
-function glowBlob(x, y, r, col, pts){
+function glowBlob(x, y, r, col, pts, ar, rot){
   glg.save(); glg.scale(0.25, 0.25); glg.translate(-camX, -camY);
   /* clip the bloom to the same shadow polygon — a lamp that is hidden behind a
      wall must not halo through it, which is the tell that gives away a fake
      lighting model even when the lightmap itself is correct */
   if (pts){ glg.beginPath(); _tracePoly(glg, pts); glg.clip(); }
+  _fixtureXform(glg, x, y, ar, rot);
   const gr = glg.createRadialGradient(x, y, 1, x, y, r);
   gr.addColorStop(0, col + "0.8)"); gr.addColorStop(1, col + "0)");
   glg.fillStyle = gr; glg.beginPath(); glg.arc(x, y, r, 0, TAU); glg.fill();
@@ -863,9 +922,10 @@ function drawGame(){
     let a = L.em ? 0.55 : 0.72;
     if (L.flick && Math.sin(performance.now() / 90 + L.x) > 0.86) a *= 0.4;
     if (L.exit){ const on = LV.hacks >= (LV.def.hacksNeed || 0) && (!LV.def.fileNeed || LV.file) || LV.def.exfil; a = on ? 0.6 : 0.18; }
+    if (L.inten) a *= L.inten;                     // per-fixture brightness
     const lp = lightPolyFor(L, L.r);
-    lmLight(L.x, L.y, L.r, a, lp);
-    glowBlob(L.x, L.y, L.r * 0.5, L.col || (L.warm ? th.lampWarm : th.lampCol), lp);
+    lmLight(L.x, L.y, L.r, a, lp, L.ar, L.rot);
+    glowBlob(L.x, L.y, L.r * 0.5, L.col || (L.warm ? th.lampWarm : th.lampCol), lp, L.ar, L.rot);
   }
   for (const M of MOTES){
     M.a += M.sp * 0.016;
