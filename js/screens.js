@@ -574,6 +574,7 @@ function drawDebrief(dt){
     btn(390, H - 120, 170, 52, "↻ REPLAY", () => startBrief(DB.n));
     btn(580, H - 120, 170, 52, "☰ MENU", () => { STATE = "select"; });
     if (walletAddr) btn(770, H - 120, 260, 52, lbMsg || "📡 SUBMIT CAMPAIGN", () => submitScore(), { fs: 12 });
+    btn(1046, H - 120, 174, 52, "🖼 CARD", () => shareCard(r, DB.n), { fs: 12 });
   }
   g.font = "700 11px Verdana"; g.fillStyle = "#57717f";
   g.fillText("campaign total " + campaignScore().toLocaleString() + " pts", 90, H - 40);
