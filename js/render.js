@@ -1266,6 +1266,31 @@ function drawHUD(){
     }
     g.strokeStyle = "rgba(255,120,130,0.4)"; g.lineWidth = 1; heartPath(x, y, 10); g.stroke();
   }
+
+  /* SPLIT — the clock against this floor's par, and the gap to your own best.
+     `par` has been sitting in levels.js all along driving a silent time bonus;
+     nothing ever showed it, so there was nothing to race. The colour is the
+     medal you are currently ON PACE for, so it degrades live as you lose time. */
+  if (LV && LV.def && LV.def.par > 0){
+    const par = LV.def.par, t = LV.time || 0, med = medalFor(t, par), cx = W / 2;
+    /* The CAUTION/COMBAT banner owns W/2,40. Drop below it while an alert is
+       up rather than draw through it — the layout audit flags this at 63%. */
+    const yo = LV.alert > 0 ? 46 : 0;
+    g.textAlign = "center";
+    g.font = "900 19px Arial Black";
+    g.fillStyle = med ? med.col : "#ff8f8f";
+    g.fillText(fmtSplit(t), cx, 30 + yo);
+    g.font = "700 10px Verdana";
+    g.fillStyle = "rgba(157,180,204,0.8)";
+    g.fillText((med ? med.name : "OVER PAR") + " · PAR " + fmtSplit(par), cx, 45 + yo);
+    const best = PROG.lv[LV.n] && PROG.lv[LV.n].time;
+    if (best > 0){
+      const d = t - best;
+      g.fillStyle = d <= 0 ? "#7cf9a5" : "#ff9d5b";
+      g.fillText((d <= 0 ? "−" : "+") + fmtSplit(Math.abs(d)) + " vs BEST", cx, 59 + yo);
+    }
+    g.textAlign = "left";
+  }
   /* objective block */
   const objS = { hacks: LV.hacks, file: LV.file, holdDone: LV.holdDone };
   g.font = "900 10px Arial Black"; g.fillStyle = "#57717f";

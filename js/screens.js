@@ -489,10 +489,18 @@ function computeResult(){
                 intel: s.intel, intelMax: LV.picks.filter(q => q.k === "intel").length,
                 alarms: s.alarms, diff: OPT.diff };
   res.rank = rankFor(res);
+  /* medal is purely the clock, so it is judged separately from rank — the best
+     medal is always re-derived from the best TIME kept in PROG, not stored */
+  const med = medalFor(LV.time, LV.def.par);
+  res.medal = med ? med.k : null;
   return res;
 }
 function finishLevel(){
   const r = computeResult();
+  /* Snapshot the previous best time BEFORE anything below mutates PROG —
+     the debrief compares against it, and by the time it draws, PROG already
+     holds this run. Read it late and "NEW BEST" can never fire. */
+  const prevBest = (PROG.lv[LV.n] && PROG.lv[LV.n].time) || 0;
   const old = PROG.lv[LV.n];
   if (!old || r.score > old.score) PROG.lv[LV.n] = r;
   else { /* keep the best score, but a ribbon earned is a ribbon KEPT — an
@@ -510,7 +518,7 @@ function finishLevel(){
   c.intel = (c.intel || 0) + r.intel; c.alarms = (c.alarms || 0) + r.alarms;
   c.time = (c.time || 0) + r.time;
   saveProg();
-  DB = { n: LV.n, r, t: 0, stampT: 0 };
+  DB = { n: LV.n, r, t: 0, stampT: 0, prevBest };
   STATE = "debrief"; musicWant("calm");
 }
 function drawDebrief(dt){
@@ -521,7 +529,7 @@ function drawDebrief(dt){
   g.font = "900 17px Arial Black"; g.fillStyle = "#9db4cc";
   g.fillText("OP " + DB.n + " — " + LEVELS[DB.n].name, 90, 142);
   const r = DB.r, rows = [
-    ["TIME", fmtTime(r.time)],
+    ["TIME", fmtTime(r.time) + "   par " + fmtTime(LEVELS[DB.n].par)],
     ["SPOTTED", (LV.stats.spotted || 0) + "×"],
     ["ALARMS", r.alarms + "×"],
     ["SLEEPERS / KOs", r.kos + ""],
@@ -537,6 +545,20 @@ function drawDebrief(dt){
   if (shown >= rows.length){
     if (r.ghost){ g.fillStyle = "#7cf9a5"; g.fillText("👻 GHOST — they never knew", 90, 200 + rows.length * 34); }
     if (r.pacifist){ g.fillStyle = "#8fc7ff"; g.fillText("🕊 PACIFIST — everyone wakes up tomorrow", 90, 226 + rows.length * 34); }
+    /* medal + the gap to your own best on this floor — the reason to run it again */
+    const med = MEDALS.find(m => m.k === r.medal);
+    if (med){
+      g.fillStyle = med.col;
+      g.fillText("🏅 " + med.name + " — inside " + (med.mul === 1 ? "par" : Math.round(med.mul * 100) + "% of par"), 90, 252 + rows.length * 34);
+    }
+    const prev = DB.prevBest || 0;
+    if (prev > 0 && Math.abs(prev - r.time) > 0.05){
+      const d = r.time - prev;
+      g.font = "700 13px Verdana"; g.fillStyle = d < 0 ? "#7cf9a5" : "#57717f";
+      g.fillText(d < 0 ? "NEW BEST — " + fmtSplit(Math.abs(d)) + " faster than your last"
+                       : "your best is still " + fmtSplit(Math.abs(d)) + " faster", 90, 276 + rows.length * 34);
+      g.font = "700 15px Verdana";
+    }
     g.font = "900 34px Arial Black"; g.fillStyle = "#ffd27c";
     g.fillText(r.score.toLocaleString() + " pts", 90, 330 + rows.length * 34);
     /* stamp slam */

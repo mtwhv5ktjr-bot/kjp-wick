@@ -416,3 +416,25 @@ function rankFor(r){
   if (r.kills > 6) return "RAMBO";
   return "OPERATOR";
 }
+
+/* PAR MEDALS. Every level already carried a `par` time, but it only ever fed a
+   hidden time bonus — nothing on screen ever said what you were racing. These
+   turn that existing number into a visible target. Deliberately separate from
+   rank: rank is about HOW you moved through the building (seen? killed?),
+   a medal is only about the clock, so a BABA YAGA run can still be slow. */
+const MEDALS = [
+  { k: "gold",   name: "GOLD",   col: "#ffd27c", mul: 0.75 },
+  { k: "silver", name: "SILVER", col: "#d8e4f0", mul: 1.00 },
+  { k: "bronze", name: "BRONZE", col: "#d79a63", mul: 1.50 }
+];
+function medalFor(time, par){
+  if (!(par > 0) || !(time >= 0)) return null;
+  for (const m of MEDALS) if (time <= par * m.mul) return m;
+  return null;
+}
+/* mm:ss.t — the tenth matters when people start racing each other */
+function fmtSplit(t){
+  t = Math.max(0, t || 0);
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return m + ":" + (s < 10 ? "0" : "") + s.toFixed(1);
+}
