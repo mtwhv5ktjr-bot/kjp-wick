@@ -473,9 +473,20 @@ function drawGuard(e){
     return;
   }
   g.save(); g.translate(e.x, e.y); g.scale(1.32, 1.32);
-  const officer = e.kind === "officer", sentry = e.kind === "sentry";
-  const vest = officer ? "#d3d7e0" : sentry ? "#232e3c" : "#2a3442";
-  const vestD = officer ? "#9aa2b4" : sentry ? "#151d28" : "#1a222e";
+  const officer = e.kind === "officer", sentry = e.kind === "sentry", director = e.kind === "director";
+  /* the Director wears the only black suit in the building — he must be
+     identifiable across a dark room at a glance, because the correct
+     response to seeing him is different from any other silhouette */
+  const vest = director ? "#0d1016" : officer ? "#d3d7e0" : sentry ? "#232e3c" : "#2a3442";
+  const vestD = director ? "#05070a" : officer ? "#9aa2b4" : sentry ? "#151d28" : "#1a222e";
+  if (director){
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 420);
+    g.save();
+    g.globalAlpha = 0.16 + pulse * 0.12;
+    g.fillStyle = "#ff4d4d";
+    g.beginPath(); g.arc(0, 0, 24 + pulse * 4, 0, TAU); g.fill();
+    g.restore();
+  }
   if (down(e)){
     g.rotate(1.32 + (e.x % 0.6));
     softShadow(0, 4, 18, 10);

@@ -19,6 +19,10 @@ function startLevel(n){
   tutStart();
   /* confirm the loadout out loud at the top of every op — no equip screen to
      forget, no doubt about whether the NFTs actually came in with you */
+  /* Say it out loud. A hunter who never stands down changes how the floor
+     should be played, and discovering that by dying is not a lesson. */
+  if ((LV.def.guards || []).some(gd => gd.kind === "director"))
+    setTimeout(() => { if (LV) toast("THE DIRECTOR is on this floor — he does not lose interest", "#ff4d4d"); }, 1500);
   const gearOn = window.ownedGearTypes || [];
   if (gearOn.length) setTimeout(() => {
     if (LV) toast("✓ " + gearOn.length + " GEAR ACTIVE — " + gearOn.map(t => GEARDEFS[t] && GEARDEFS[t].name).filter(Boolean).join(", "), "#ff9d5b");

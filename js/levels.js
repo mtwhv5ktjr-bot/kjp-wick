@@ -287,7 +287,11 @@ const LEVELS = [null, // 1-indexed
     { x: 8,  y: 13, kind: "sentry",  route: [[8,13],[40,13]] },
     { x: 2,  y: 1,  kind: "guard",   route: [[2,1],[2,3]] },
     { x: 43, y: 1,  kind: "guard",   route: [[43,1],[43,3]] },
-    { x: 24, y: 18, kind: "officer", route: [[24,18],[36,18]] }
+    { x: 24, y: 18, kind: "officer", route: [[24,18],[36,18]] },
+    /* THE DIRECTOR — walks the long axis of the SCIF until the building gives
+       him something, then never stops working that lead. Routed across the
+       middle so he cuts the floor in half rather than guarding one corner. */
+    { x: 24, y: 13, kind: "director", route: [[24,13],[8,13],[40,13]] }
   ],
   dogs: [ { x: 25, y: 9, route: [[25,9],[25,5]] } ],
   civs: [],
@@ -355,7 +359,9 @@ const LEVELS = [null, // 1-indexed
     { x: 8,  y: 13, kind: "guard",   route: [[8,13],[8,19]] },
     { x: 32, y: 17, kind: "guard",   route: [[32,17],[42,17]] },
     { x: 6,  y: 10, kind: "officer", route: [[6,10],[40,10]] },
-    { x: 10, y: 1,  kind: "sentry",  route: [[10,1],[40,1]] }
+    { x: 10, y: 1,  kind: "sentry",  route: [[10,1],[40,1]] },
+    /* the roof: he is between you and the exfil, and he knows it */
+    { x: 26, y: 13, kind: "director", route: [[26,13],[12,13],[40,13]] }
   ],
   dogs: [ { x: 34, y: 21, route: [[34,21],[20,21]] } ],
   civs: [],

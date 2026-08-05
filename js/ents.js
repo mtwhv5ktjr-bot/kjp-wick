@@ -9,7 +9,14 @@
 let P = null;                  // the player
 const GK = { guard: { hp: 1.4, spd: 95, range: 300, fov: 1.3, radio: 1.15, gun: "p9" },
              sentry:{ hp: 2.2, spd: 88, range: 330, fov: 1.25, radio: 1.15, gun: "smg" },
-             officer:{hp: 1.4, spd: 100, range: 300, fov: 1.35, radio: 0.7, gun: "p9" } };
+             officer:{hp: 1.4, spd: 100, range: 300, fov: 1.35, radio: 0.7, gun: "p9" },
+             /* THE DIRECTOR. Tanky and wide-eyed, but no faster than an officer
+                and slow on the trigger — the pressure is that he never stops
+                coming, not that he out-shoots you. He also never calls it in:
+                he does not need backup, and a radio wind-up you could interrupt
+                would give you a way to switch him off. */
+             director:{hp: 6, spd: 102, range: 380, fov: 1.7, radio: 0, gun: "p9" } };
+const isHunter = e => e.kind === "director";
 
 /* ---------- spawn ---------- */
 function initEnts(){
@@ -61,7 +68,9 @@ function spawnGuard(gd, atPx){
   return {
     kind: gd.kind, x: atPx ? atPx.x : gd.x * T + T / 2, y: atPx ? atPx.y : gd.y * T + T / 2,
     ang: rr(0, TAU), route: gd.route || [], ri: 0, fwd: true, card: gd.card || null, cardDropped: false,
-    st: "patrol", detect: 0, susT: 0, target: null, waitT: 0, scanA: 0,
+    /* the Director opens in hunt and can never fall back to patrol */
+    st: gd.kind === "director" ? "hunt" : "patrol", huntT: 0,
+    detect: 0, susT: 0, target: null, waitT: 0, scanA: 0,
     path: null, pathI: 0, repathT: 0, radioT: -1, shootT: 0, burst: 0, aimT: 0,
     hp: k.hp, spd: k.spd, range: k.range, fov: k.fov, radioBase: k.radio, gun: k.gun,
     sleep: 0, ko: 0, dead: false, found: false, hits: 0, stagT: 0, r: 14, popT: 0, pop: ""
@@ -313,7 +322,16 @@ function _punch(){
     if (dist(P.x, P.y, e.x, e.y) < 52 && Math.abs(angDiff(P.ang, angTo(P.x, P.y, e.x, e.y))) < 1){
       e.hits = (e.hits || 0) + 1; e.stagT = 0.5;
       fxBlood(e.x, e.y, 2, "#5a7a8f");
-      if (e.hits >= 3){ e.ko = 25; e.st = "patrol"; e.detect = 0; SFX.thud(); LV.stats.kos++; _dropCard(e); }
+      /* The Director takes twice the beating and wakes up hunting, not
+         patrolling. Three punches ending the campaign's antagonist would be
+         cheap — but making him unKOable would delete the reward for getting
+         behind him, which is the whole game. Six, and he gets back up. */
+      const koAt = isHunter(e) ? 6 : 3;
+      if (e.hits >= koAt){
+        e.ko = isHunter(e) ? 16 : 25; e.st = isHunter(e) ? "hunt" : "patrol";
+        e.detect = 0; SFX.thud(); LV.stats.kos++; _dropCard(e);
+        if (isHunter(e)) toast("THE DIRECTOR is down — he will not stay down", "#ff8f8f");
+      }
       else SFX.hit();
       break;
     }
@@ -671,7 +689,7 @@ function guardUpdate(e, dt){
       if (e.repathT <= 0){ nearestPathTo(e, Math.floor(e.target.x / T), Math.floor(e.target.y / T), "g"); e.repathT = 0.8; }
       if (walkPath(e, e.spd * 1.15, dt)){ e.target = null; e.scanA = e.ang; }
     } else e.ang = e.scanA + Math.sin(LV.time * 2.2) * 1.1;
-    if (e.susT <= 0){ e.st = "return"; e.path = null; }
+    if (e.susT <= 0){ e.st = isHunter(e) ? "hunt" : "return"; e.path = null; }
   }
   else if (e.st === "search"){
     e.susT -= dt;
@@ -689,15 +707,55 @@ function guardUpdate(e, dt){
       else { e.sweepSlot++; }                       // blocked slice — take the next one
     }
     walkPath(e, e.spd * 1.1, dt);
-    if (e.susT <= 0 || (LV.alert === 0)){ e.st = "return"; e.path = null; e.sweepSlot = null; }
+    if (e.susT <= 0 || (LV.alert === 0)){ e.st = isHunter(e) ? "hunt" : "return"; e.path = null; e.sweepSlot = null; }
   }
   else if (e.st === "return"){
     const [rx, ry] = e.route[e.ri];
     if (!e.path || e.pathI >= e.path.length){
-      if (Math.floor(e.x / T) === rx && Math.floor(e.y / T) === ry){ e.st = "patrol"; e.path = null; }
+      if (Math.floor(e.x / T) === rx && Math.floor(e.y / T) === ry){ e.st = isHunter(e) ? "hunt" : "patrol"; e.path = null; }
       else nearestPathTo(e, rx, ry, "g");
     }
     if (e.path) walkPath(e, e.spd, dt);
+  }
+  /* HUNT — the Director's resting state, and the one he can never leave.
+     Everyone else forgets: susT runs out, they walk back to their route and
+     the building goes quiet again. He does not. Once the floor has a last
+     known position he walks to it, and when it goes stale he keeps working
+     outward from it instead of standing down.
+     Crucially he is NOT omniscient — he only ever knows what the building
+     knows (LV.lastKnown). Before you slip up he has nothing to go on and
+     simply walks his route, which is what makes the first mistake matter. */
+  else if (e.st === "hunt"){
+    const lead = LV.lastKnown;
+    if (lead){
+      e.huntT = (e.huntT || 0) - dt;
+      const stale = dist(e.x, e.y, lead.x, lead.y) < 90;
+      if (!e.path || e.pathI >= e.path.length || e.huntT <= 0){
+        e.huntT = 1.4;
+        /* on top of the lead and he still has not found you: work outward in
+           widening rings rather than stand on the spot */
+        const rad = stale ? rr(3.5, 8) : 0;
+        const a = rr(0, TAU);
+        const tx = Math.floor(lead.x / T + Math.cos(a) * rad), ty = Math.floor(lead.y / T + Math.sin(a) * rad);
+        if (!solidMove(tx, ty, "g", { pathing: true })) nearestPathTo(e, tx, ty, "g");
+        else nearestPathTo(e, Math.floor(lead.x / T), Math.floor(lead.y / T), "g");
+      }
+      walkPath(e, e.spd * 1.05, dt);
+    } else {
+      /* nothing to go on yet — walk the route like anyone else */
+      if (e.route.length > 1){
+        const [rx, ry] = e.route[e.ri];
+        if (!e.path || e.pathI >= e.path.length){
+          if (Math.floor(e.x / T) === rx && Math.floor(e.y / T) === ry){
+            e.ri = e.fwd ? e.ri + 1 : e.ri - 1;
+            if (e.ri >= e.route.length){ e.fwd = false; e.ri = e.route.length - 2; }
+            if (e.ri < 0){ e.fwd = true; e.ri = 1; }
+            e.scanA = e.ang;
+          } else nearestPathTo(e, rx, ry, "g");
+        }
+        if (e.path) walkPath(e, e.spd * 0.85, dt);
+      } else e.ang = e.scanA + Math.sin(LV.time * 1.1 + e.x) * 0.6;
+    }
   }
   else { /* patrol */
     if (e.waitT > 0){
