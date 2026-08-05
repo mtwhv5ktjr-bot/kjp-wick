@@ -26,6 +26,11 @@ let RR_hover = 0;
    Open in a new tab, but fall back to same-tab if a popup blocker eats it —
    a dead buy button is worse than losing the game tab. */
 const MINT_URL = "https://kjp-game.wick.pics/mint";
+/* Secondary market — the only route to a type once its share of the 100 is
+   gone, and the only way to buy a SPECIFIC piece rather than a random one.
+   Live since 2026-08-04 (KJPGearMarket 0x09A53d8B…); 15% of every resale is
+   burned, half KJP half WICK. */
+const MARKET_URL = "https://mint.wick.pics/#gear-market";
 const ARSENAL_URL = "https://mint.wick.pics";
 function openShop(url){
   try{
@@ -66,6 +71,21 @@ function drawReadyRoom(){
   g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
   g.fillText(owned.length ? owned.length + "/8 GEAR TYPES · ALL ACTIVE" : "NO GEAR — the ops still run without it", CX, CY + 146);
   g.textAlign = "left";
+  /* Holders get a way OUT as well as in. Deliberately no valuation here — the
+     game has no price feed, and a made-up number on a screen people trade
+     against would be worse than no number. */
+  if (owned.length){
+    const mw = 250, mx = CX - mw / 2, my = CY + 158;
+    const mh2 = MOUSE.x >= mx && MOUSE.x <= mx + mw && MOUSE.y >= my && MOUSE.y <= my + 22;
+    g.fillStyle = mh2 ? "rgba(124,249,165,0.18)" : "rgba(124,249,165,0.06)";
+    g.fillRect(mx, my, mw, 22);
+    g.strokeStyle = mh2 ? "#7cf9a5" : "rgba(124,249,165,0.28)"; g.lineWidth = 1;
+    g.strokeRect(mx + 0.5, my + 0.5, mw - 1, 21);
+    g.font = "900 9px Arial Black"; g.fillStyle = mh2 ? "#7cf9a5" : "#5e8f70"; g.textAlign = "center";
+    g.fillText("◈ SELL OR TRADE — 15% BURNS ON EVERY SALE", CX, my + 14);
+    g.textAlign = "left";
+    UIB.push({ x: mx, y: my, w: mw, h: 22, cb: () => openShop(MARKET_URL) });
+  }
 
   /* ---- gear callouts, wired to the body ---- */
   const L = [], R = [];
@@ -100,10 +120,24 @@ function drawReadyRoom(){
     if (has){ g.fillStyle = "#7cf9a5"; g.fillText("ARMED", bx + bw - 44, by + 15); }
     else {
       g.fillStyle = "#4e5c68"; g.fillText(d.pool + " OF 100", bx + bw - 56, by + 15);
-      /* the whole ghosted box is the buy button */
+      /* Two routes to owning this, because minting is random and finite: MINT
+         pulls an unknown piece from what is left of the 100, MARKET buys this
+         exact type from a holder. Once a type's share is minted out, the
+         market is the ONLY route — so it can never be a mint-only screen.
+         The rects are carved apart, not stacked: overlapping click targets
+         make a tap ambiguous and the layout audit fails on BTN/BTN. */
+      const mkW = 74, mintW = bw - mkW - 8;
       g.fillStyle = hot ? "#ffd27c" : "#6a7a88"; g.font = "900 8px Arial Black";
-      g.fillText(hot ? "▸ CLICK TO MINT THIS" : "NOT OWNED — CLICK TO MINT", bx + 10, by + bh - 7);
-      UIB.push({ x: bx, y: by, w: bw, h: bh, cb: () => openShop(MINT_URL) });
+      g.fillText(hot ? "▸ MINT ONE" : "NOT OWNED — MINT", bx + 10, by + bh - 7);
+      UIB.push({ x: bx, y: by, w: mintW, h: bh, cb: () => openShop(MINT_URL) });
+      const mkX = bx + mintW + 8, mkY = by + bh - 22, mkHot = MOUSE.x >= mkX && MOUSE.x <= mkX + mkW && MOUSE.y >= mkY && MOUSE.y <= mkY + 16;
+      g.fillStyle = mkHot ? "rgba(124,249,165,0.22)" : "rgba(124,249,165,0.08)";
+      g.fillRect(mkX, mkY, mkW, 16);
+      g.strokeStyle = mkHot ? "#7cf9a5" : "rgba(124,249,165,0.3)"; g.lineWidth = 1;
+      g.strokeRect(mkX + 0.5, mkY + 0.5, mkW - 1, 15);
+      g.fillStyle = mkHot ? "#7cf9a5" : "#5e8f70";
+      g.fillText("◈ MARKET", mkX + 8, mkY + 11);
+      UIB.push({ x: mkX, y: mkY, w: mkW, h: 16, cb: () => openShop(MARKET_URL) });
     }
   };
   L.forEach((t, i) => place(t, i, "l"));
