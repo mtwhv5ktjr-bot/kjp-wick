@@ -994,6 +994,9 @@ function drawDossier(){
   }
   btn(W - 190, H - 62, 120, 40, "← BACK", () => { STATE = "title"; });
   btn(W - 340, H - 62, 140, 40, "📁 THE CASE", () => { STATE = "case"; }, { fs: 12 });
+  /* the conspiracy itself — what all that intel was actually for */
+  const [bfGot, bfAll] = bfTotal();
+  btn(W - 560, H - 62, 210, 40, "🗂 BLACK FILE " + bfGot + "/" + bfAll, () => { STATE = "blackfile"; }, { fs: 12 });
   drawSiteLinks();
   dispatchClicks();
 }

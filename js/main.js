@@ -93,6 +93,7 @@ function frame(now, syncOnly){
   else if (STATE === "intel") drawIntel();
   else if (STATE === "options") drawOptions();
   else if (STATE === "dossier") drawDossier();
+  else if (STATE === "blackfile") drawBlackFile();
   else if (STATE === "case") drawCase();
   else if (STATE === "ready") drawReadyRoom();
   else if (STATE === "brief") drawBrief(dt);
