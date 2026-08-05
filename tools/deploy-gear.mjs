@@ -28,7 +28,13 @@ const PRICE      = ethers.parseEther(process.env.PRICE_PLS ?? "1000000");       
 const art = JSON.parse(readFileSync(join(root, "out", "KJPGear.json"), "utf8"));
 const go = process.argv.includes("--go");
 const openIdx = process.argv.indexOf("--open");
+/* Parsed HERE, not further down, because the dry-run gate below has to be able
+   to see it. While it was parsed after that gate, every --market run printed
+   the mint plan and exited 0 without deploying anything — silent no-op. */
+const mktIdx = process.argv.indexOf("--market");
 
+/* the mint plan is noise (and misleading) when the market is what is deploying */
+if (mktIdx < 0){
 console.log("KJP GEAR — deploy plan");
 console.log("  supply      100 (22/20/16/14/12/8/5/3)");
 console.log("  price       " + ethers.formatEther(PRICE) + " PLS per item  (max 5 per tx)");
@@ -40,8 +46,9 @@ console.log("  WPLS        " + WPLS);
 console.log("  KJP token   " + (KJP_TOKEN || "‼ NOT SET — export KJP_TOKEN=0x…"));
 console.log("  WICK token  " + WICK_TOKEN);
 console.log("  withdraw()  none — the split is bytecode, not a promise");
+}
 
-if (!go && openIdx < 0){
+if (!go && openIdx < 0 && mktIdx < 0){
   console.log("\ndry run. re-run with --go (and PK=0x…) to deploy for real.");
   process.exit(0);
 }
@@ -53,11 +60,20 @@ console.log("\ndeployer " + wallet.address + "  bal " + ethers.formatEther(await
 /* --market <gearAddr> : deploy the secondary market against a live gear
    contract. Separate step on purpose — the mint must exist first, and a
    market is not needed on day one. */
-const mktIdx = process.argv.indexOf("--market");
 if (mktIdx >= 0){
   const gearAddr = process.argv[mktIdx + 1];
   if (!/^0x[a-fA-F0-9]{40}$/.test(gearAddr || "")){ console.error("✗ --market needs the deployed KJPGear address"); process.exit(1); }
   const mArt = JSON.parse(readFileSync(join(root, "out", "KJPGearMarket.json"), "utf8"));
+  console.log("\nKJP GEAR MARKET — deploy plan");
+  console.log("  gear        " + gearAddr);
+  console.log("  royalty     15% of every sale, burned 50/50 KJP + WICK");
+  console.log("  seller gets 85%, paid in the same transaction");
+  console.log("  bytecode    " + (mArt.bytecode.length / 2 - 1) + " bytes (24576 limit)");
+  /* the constructor reverts on any of these being codeless — check first so the
+     failure is a sentence rather than an opaque revert */
+  for (const [n, a] of [["gear", gearAddr], ["router", BURN_ROUTER], ["KJP", KJP_TOKEN], ["WICK", WICK_TOKEN]]){
+    if ((await provider.getCode(a)) === "0x"){ console.error("\n✗ " + n + " " + a + " has no code on this chain — constructor would revert"); process.exit(1); }
+  }
   const f = new ethers.ContractFactory(mArt.abi, mArt.bytecode, wallet);
   const c = await f.deploy(gearAddr, BURN_ROUTER, WPLS, KJP_TOKEN, WICK_TOKEN);
   console.log("deploying market… " + c.deploymentTransaction().hash);
