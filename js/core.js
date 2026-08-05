@@ -249,7 +249,7 @@ function musicTick(){
 function musicWant(m){ MUSIC.want = m; }
 
 /* ---------- save ---------- */
-let PROG = { lv: {}, skin: "midnight", carry: [], name: "", tutorial: false };
+let PROG = { lv: {}, skin: "midnight", carry: [], name: "", tutorial: false, gearOff: [] };
 try{ const p = JSON.parse(localStorage.getItem("kjp_prog") || "null"); if (p && typeof p === "object"){ PROG = Object.assign(PROG, p); PROG.lv = PROG.lv || {}; } }catch(e){}
 function saveProg(){ try{ localStorage.setItem("kjp_prog", JSON.stringify(PROG)); }catch(e){} }
 function lvBest(n){ return PROG.lv[n] || null; }
@@ -350,11 +350,17 @@ const MODDEFS = {
    the game ships silenced.
    ================================================================ */
 const GEARDEFS = {
+  /* COSTS. Gear used to be eight strictly-good bonuses, which is not a loadout
+     — it is a checklist. Each cost below is the real-world one, so it reads as
+     a choice rather than a nerf, and STOW in the ready room lets you refuse it. */
   1: { name: "SUPPRESSOR",     tag: "SUPP",  rare: "Common",    pool: 22,
        blurb: "silences every lethal gun you carry",
-       gun: s => { s.silenced = true; s.noise = Math.min(s.noise, 85); } },
+       cost: "−15% damage — subsonic rounds hit softer",
+       gun: s => { s.silenced = true; s.noise = Math.min(s.noise, 85);
+                   s.dmg = (s.dmg || 0) * 0.85; } },
   2: { name: "KEVLAR WEAVE",   tag: "KEVLAR", rare: "Common",   pool: 20,
-       blurb: "+1 ♥ and the first hit of each op is absorbed" },
+       blurb: "+1 ♥ and the first hit of each op is absorbed",
+       cost: "−7% movement, and the plates carry when you run" },
   3: { name: "TACTICAL BOOTS", tag: "BOOTS", rare: "Uncommon",  pool: 16,
        blurb: "+8% movement, and running is 25% quieter" },
   4: { name: "EXTENDED MAGS",  tag: "MAGS",  rare: "Uncommon",  pool: 14,
@@ -370,7 +376,19 @@ const GEARDEFS = {
        blurb: "×1.25 score, and every exhibit pays double" }
 };
 window.ownedGearTypes = [];
-const hasGear = t => (window.ownedGearTypes || []).includes(t);
+/* OWNED and NOT stowed. Gear used to be pure upside, so "everything you own
+   walks in with you" was strictly good. Now that pieces carry costs, a holder
+   must be able to leave one in the locker — otherwise buying more gear could
+   make you worse at the game, which is a rotten deal for an NFT. */
+const gearStowed = t => ((PROG && PROG.gearOff) || []).includes(t);
+const hasGear = t => (window.ownedGearTypes || []).includes(t) && !gearStowed(t);
+function toggleGear(t){
+  PROG.gearOff = PROG.gearOff || [];
+  const i = PROG.gearOff.indexOf(t);
+  if (i >= 0) PROG.gearOff.splice(i, 1); else PROG.gearOff.push(t);
+  bumpMods();                       // weapon specs are cached per gear set
+  saveProg();
+}
 window.ownedModTypes = [];
 let _specCache = {}, _specGen = -1;
 function bumpMods(){ _specCache = {}; _specGen++; }
@@ -380,7 +398,10 @@ function bumpMods(){ _specCache = {}; _specGen++; }
 function wSpec(id){
   const base = WEAPONS[id];
   if (!base || base.melee) return base;
-  const key = id + ":" + (window.ownedModTypes || []).join(",") + "|" + (window.ownedGearTypes || []).join(",");
+  /* stowed gear is part of the key: two different loadouts must never share a
+     cached spec, even though bumpMods() also clears the cache on every toggle */
+  const key = id + ":" + (window.ownedModTypes || []).join(",") + "|" + (window.ownedGearTypes || []).join(",")
+            + "|off" + ((PROG && PROG.gearOff) || []).join(",");
   if (_specCache[key]) return _specCache[key];
   const s = Object.assign({}, base);
   const seen = new Set();
@@ -390,6 +411,7 @@ function wSpec(id){
   }
   const gseen = new Set();
   for (const t of window.ownedGearTypes || []){
+    if (gearStowed(t)) continue;                  // left in the locker — must not touch the gun
     if (gseen.has(t) || !GEARDEFS[t]) continue;
     gseen.add(t);
     if (GEARDEFS[t].gun) GEARDEFS[t].gun(s);

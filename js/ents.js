@@ -200,7 +200,8 @@ function playerUpdate(dt){
   if (mlen > 1){ mx /= mlen; my /= mlen; }
   const chokeLock = !!P.choke, dragging = !!P.drag;
   const boots = hasGear(3) ? 1.08 : 1;                    // TACTICAL BOOTS
-  let spd = (P.sneak ? 78 : P.runHeld ? 216 : 138) * boots;
+  const armour = hasGear(2) ? 0.93 : 1;                   // KEVLAR: plates cost you 7%
+  let spd = (P.sneak ? 78 : P.runHeld ? 216 : 138) * boots * armour;
   if (dragging) spd = Math.min(spd, 66);
   if (chokeLock) spd = 0;
   P.moving = mlen > 0.15 ? 1 : 0;
@@ -213,8 +214,9 @@ function playerUpdate(dt){
       P.stepT = 0.3;
       SFX.step(P.runHeld, P.sneak);
       const soft = hasGear(3) ? 0.75 : 1;                 // BOOTS: run 25% quieter
+      const clank = hasGear(2) ? 1.18 : 1;                // KEVLAR: the plates carry
       const surf = SURF_NOISE[surfaceOf(P.x, P.y)] || 1;  // marble sings, carpet forgives
-      if (!P.sneak) addNoise(P.x, P.y, (P.runHeld ? 165 : 55) * soft * surf, "step");
+      if (!P.sneak) addNoise(P.x, P.y, (P.runHeld ? 165 : 55) * soft * clank * surf, "step");
     }
   }
   /* LAST-RESORT UNSTICK. If the player is somehow inside a tile that is solid

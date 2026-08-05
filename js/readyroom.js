@@ -53,7 +53,7 @@ function drawReadyRoom(){
 
   g.font = "900 30px Arial Black"; g.fillStyle = "#e6f1ff"; g.fillText("READY ROOM", 60, 58);
   g.font = "700 11px Verdana"; g.fillStyle = "#7c8ba3";
-  g.fillText("Gear has no slots and no limit — everything you own walks in with you, every op. The only choice here is which two guns you sling.", 60, 78);
+  g.fillText("No slots, no limit — everything you own walks in with you unless you stow it. Some pieces cost you something; click one to leave it in the locker.", 60, 78);
 
   /* ---- the operative, centre stage ---- */
   const CX = W / 2, CY = 330;
@@ -69,7 +69,9 @@ function drawReadyRoom(){
   g.font = "900 12px Arial Black"; g.fillStyle = "#7cf9a5"; g.textAlign = "center";
   g.fillText(skinDef().name, CX, CY + 128);
   g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
-  g.fillText(owned.length ? owned.length + "/8 GEAR TYPES · ALL ACTIVE" : "NO GEAR — the ops still run without it", CX, CY + 146);
+  const activeN = owned.filter(t => !gearStowed(t)).length;
+  g.fillText(owned.length ? activeN + " OF " + owned.length + " GEAR TYPES ARMED" + (activeN < owned.length ? " · " + (owned.length - activeN) + " STOWED" : "")
+                          : "NO GEAR — the ops still run without it", CX, CY + 146);
   g.textAlign = "left";
   /* Holders get a way OUT as well as in. Deliberately no valuation here — the
      game has no price feed, and a made-up number on a screen people trade
@@ -93,9 +95,10 @@ function drawReadyRoom(){
   const rowY = i => 132 + i * 96;
   const place = (t, i, side) => {
     const d = GEARDEFS[t], a = GEAR_ANCHOR[t];
-    const bw = 250, bh = 78;
+    const bw = 250, bh = 86;            // 8px taller: the cost line needs a home
     const bx = side === "l" ? 60 : W - 60 - bw, by = rowY(i);
-    const has = owned.includes(t);
+    const own = owned.includes(t);      // in the wallet
+    const has = own && !gearStowed(t);  // actually walking in with you
     const hot = MOUSE.x >= bx && MOUSE.x <= bx + bw && MOUSE.y >= by && MOUSE.y <= by + bh;
     /* wire from the box to the body point it governs */
     const ax = CX + a.x, ay = CY + a.y;
@@ -109,15 +112,33 @@ function drawReadyRoom(){
     /* the box */
     g.fillStyle = has ? (hot ? "rgba(58,40,14,0.95)" : "rgba(30,22,10,0.85)") : "rgba(10,14,18,0.7)";
     g.fillRect(bx, by, bw, bh);
-    g.strokeStyle = has ? (hot ? "#ffd27c" : "#8a6d2f") : "#232c36"; g.lineWidth = has ? 2 : 1;
+    /* three states, three looks: ARMED (warm), STOWED (cool — you own it, it is
+       just in the locker), and NOT OWNED (near-invisible) */
+    g.strokeStyle = has ? (hot ? "#ffd27c" : "#8a6d2f") : own ? "#3f5261" : "#232c36";
+    g.lineWidth = has ? 2 : 1;
     g.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
     g.font = "900 8px Arial Black"; g.fillStyle = has ? "#ff9d5b" : "#3d4854";
     g.fillText(a.label, bx + 10, by + 15);
-    g.font = "900 12px Arial Black"; g.fillStyle = has ? "#ffd27c" : "#54606e";
+    g.font = "900 12px Arial Black"; g.fillStyle = has ? "#ffd27c" : own ? "#8fa3b5" : "#54606e";
     g.fillText((has ? "◆ " : "") + d.name, bx + 10, by + 32);
     wrapText2(d.blurb, bx + 10, by + 47, bw - 20, 11, has ? "#cbd9c9" : "#414e59", "700 9px Verdana");
+    /* what it costs you to carry — the reason STOW exists */
+    if (d.cost){
+      g.font = "700 8px Verdana";
+      g.fillStyle = has ? "#e08a6a" : own ? "#5a4a42" : "#3a3430";
+      g.fillText("▼ " + d.cost, bx + 10, by + bh - 8);
+    }
     g.font = "900 8px Arial Black";
-    if (has){ g.fillStyle = "#7cf9a5"; g.fillText("ARMED", bx + bw - 44, by + 15); }
+    if (own){
+      /* owned: ARMED or STOWED, and the whole box flips it */
+      g.fillStyle = has ? "#7cf9a5" : "#6a7a88";
+      g.fillText(has ? "ARMED" : "STOWED", bx + bw - 48, by + 15);
+      if (hot){
+        g.fillStyle = "#ffd27c"; g.font = "900 8px Arial Black";
+        g.fillText(has ? "▸ CLICK TO STOW" : "▸ CLICK TO DEPLOY", bx + bw - 108, by + bh - 8);
+      }
+      UIB.push({ x: bx, y: by, w: bw, h: bh, cb: () => { toggleGear(t); SFX.ui2(); } });
+    }
     else {
       g.fillStyle = "#4e5c68"; g.fillText(d.pool + " OF 100", bx + bw - 56, by + 15);
       /* Two routes to owning this, because minting is random and finite: MINT
