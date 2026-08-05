@@ -24,7 +24,7 @@ const THEMES = {
     floor: "#262a33", floorB: "#20242c", wall: "#434a5e", wallFace: "#2b303e", wallTop: "#6971916".slice(0, 7),
     low: "#4a3d26", lowTop: "#6f5c38", seal: true,
     lampCol: "rgba(255,214,150,", lampWarm: "rgba(255,214,150,",
-    gradeLo: "rgba(30,22,10,0.25)", gradeHi: "rgba(255,214,150,0.05)", ambient: 0.72, mat: "marble"
+    gradeLo: "rgba(30,22,10,0.25)", gradeHi: "rgba(255,214,150,0.05)", ambient: 0.72, mat: "marble", spec: 1
   },
   office: {
     floor: "#232630", floorB: "#1d2029", wall: "#3d4152", wallFace: "#282b38", wallTop: "#5f6580",
@@ -42,13 +42,13 @@ const THEMES = {
     floor: "#191f29", floorB: "#141a22", wall: "#33405a", wallFace: "#20293c", wallTop: "#54678c",
     low: "#24344e", lowTop: "#3d587e", server: true,
     lampCol: "rgba(140,200,255,", lampWarm: "rgba(140,200,255,",
-    gradeLo: "rgba(6,16,34,0.34)", gradeHi: "rgba(120,190,255,0.06)", ambient: 0.85, mat: "deck"
+    gradeLo: "rgba(6,16,34,0.34)", gradeHi: "rgba(120,190,255,0.06)", ambient: 0.85, mat: "deck", spec: 1
   },
   roof: {
     floor: "#20242b", floorB: "#1a1e24", wall: "#3c4351", wallFace: "#272c37", wallTop: "#5f6a80",
     low: "#2c333e", lowTop: "#48525f", rain: true, pad: true, outdoor: true,
     lampCol: "rgba(190,215,255,", lampWarm: "rgba(255,120,120,",
-    gradeLo: "rgba(12,16,30,0.32)", gradeHi: "rgba(160,200,255,0.05)", ambient: 0.82, mat: "slab"
+    gradeLo: "rgba(12,16,30,0.32)", gradeHi: "rgba(160,200,255,0.05)", ambient: 0.82, mat: "slab", spec: 1
   }
 };
 let PRE = null, RADARPRE = null, LM = null, lmg = null, GLOW = null, glg = null, GLOW2 = null, gl2 = null;
@@ -396,11 +396,39 @@ function softShadow(x, y, rx, ry){
   gr.addColorStop(0, "rgba(0,0,0,0.42)"); gr.addColorStop(1, "rgba(0,0,0,0)");
   g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.fill();
 }
+/* FOOT PLANTING.
+   This was Math.sin(stride/9) on both feet — they slid back and forth
+   continuously and never took hold of the ground, which is precisely what
+   "floaty" looks like. A real step has two unequal phases: a long STANCE where
+   the foot is planted and travels backward at body speed (so it is still
+   relative to the WORLD), and a short SWING where it snaps forward.
+
+   Cycle length is kept at 2*PI*9 = 56.5px of travel so the cadence matches
+   what every animation in the game was already tuned against. */
+const _STEP_CYC = 56.5, _SWING = 0.34;
+function _footOffset(t){
+  if (t < 1 - _SWING) return 1 - (t / (1 - _SWING)) * 2;      // planted: linear, backward
+  const k = (t - (1 - _SWING)) / _SWING;
+  return -1 + (k * k * (3 - 2 * k)) * 2;                       // swing: eased, forward
+}
+function _footLift(t){
+  if (t < 1 - _SWING) return 0;
+  return Math.sin(((t - (1 - _SWING)) / _SWING) * Math.PI);    // 0..1..0 through the swing
+}
 function feet(stride, spread, len, col){
-  const ph = Math.sin(stride / 9);
+  const c = (((stride % _STEP_CYC) + _STEP_CYC) % _STEP_CYC) / _STEP_CYC;
   g.fillStyle = col;
-  g.beginPath(); g.ellipse(ph * len * 0.5 - 2, -spread, 4.6, 3, 0, 0, TAU); g.fill();
-  g.beginPath(); g.ellipse(-ph * len * 0.5 - 2, spread, 4.6, 3, 0, 0, TAU); g.fill();
+  const one = (t, side) => {
+    const off = _footOffset(t), up = _footLift(t);
+    /* top-down has no vertical axis, so a lifted foot is faked with a little
+       scale and outward drift — enough to read as clearing the ground */
+    g.beginPath();
+    g.ellipse(off * len * 0.5 - 2, side * (spread + up * 0.9),
+              4.6 + up * 1.2, 3 + up * 0.8, 0, 0, TAU);
+    g.fill();
+  };
+  one(c, -1);
+  one((c + 0.5) % 1, 1);
 }
 
 /* THE frog operative — articulated. Hands stay green in every skin.
@@ -409,7 +437,12 @@ function feet(stride, spread, len, col){
 function drawKJP(x, y, ang, opts){
   const sk = skinDef(), o = opts || {};
   const sneak = P && P.sneak && !o.menu;
-  const scale = 1.45 * (sneak ? 0.94 : 1);      // he's the main character — let him read like one
+  /* BODY BOB — weight transfer. Two dips per stride cycle (one per footfall),
+     tiny on purpose: at this scale anything above ~1.5% reads as a bounce
+     rather than as mass. Menus and portraits never bob. */
+  const bob = (o.moving && !o.menu)
+    ? 1 + Math.sin(((P && P.stride) || 0) / _STEP_CYC * TAU * 2) * 0.013 : 1;
+  const scale = 1.45 * (sneak ? 0.94 : 1) * bob; // he's the main character — let him read like one
   const w0 = P && !o.menu ? curW() : WEAPONS.tranq;
   const sprite = artFor([
     "kjp-top-" + PROG.skin,
@@ -1249,17 +1282,43 @@ function drawGame(){
   for (const L of LIGHTS){
     if (L.dead || !L._poly || !vis(L)) continue;
     const occ = L._occ || 0;
-    if (occ < 0.12) continue;                      // wide open — no visible beam
-    const a = Math.min(0.16, 0.03 + occ * 0.20) * (L.inten || 1);
+    const beam = occ >= 0.12;              // wide open ceilings show no beam in air
+    if (!beam && !th.spec) continue;
     const base = L.col || (L.warm ? "rgba(255,214,150," : "rgba(190,220,255,");
+    /* ONE clip for both passes. Clipping to a 73-point polygon is by far the
+       most expensive thing here, and doing it twice per light pushed the roof
+       from 6ms to 11ms. The beam and its reflection share the same silhouette,
+       so they share the same clip. */
     g.save();
     g.beginPath(); _tracePoly(g, L._poly); g.clip();
-    _fixtureXform(g, L.x, L.y, L.ar, L.rot);
-    const gr = g.createRadialGradient(L.x, L.y, L.r * 0.05, L.x, L.y, L.r);
-    gr.addColorStop(0, base + a + ")");
-    gr.addColorStop(0.55, base + (a * 0.45) + ")");
-    gr.addColorStop(1, base + "0)");
-    g.fillStyle = gr; g.beginPath(); g.arc(L.x, L.y, L.r, 0, TAU); g.fill();
+
+    if (beam){
+      const a = Math.min(0.16, 0.03 + occ * 0.20) * (L.inten || 1);
+      g.save();
+      _fixtureXform(g, L.x, L.y, L.ar, L.rot);
+      const gr = g.createRadialGradient(L.x, L.y, L.r * 0.05, L.x, L.y, L.r);
+      gr.addColorStop(0, base + a + ")");
+      gr.addColorStop(0.55, base + (a * 0.45) + ")");
+      gr.addColorStop(1, base + "0)");
+      g.fillStyle = gr; g.beginPath(); g.arc(L.x, L.y, L.r, 0, TAU); g.fill();
+      g.restore();
+    }
+    /* SPECULAR — polished floors catch the fixture. Marble, wet deck and roof
+       slab get a narrow smear under each lamp: the trick every photograph of a
+       wet street uses, and the cheapest way to make a surface read as a
+       material rather than as a colour. Carpet, grass and wood are matte and
+       get nothing, which is exactly what makes the hard floors feel hard.
+       Not gated on occlusion — a lamp over open marble still catches it. */
+    if (th.spec){
+      const sy = L.y + L.r * 0.16, sr = L.r * 0.52;
+      g.save();
+      g.translate(L.x, sy); g.scale(0.42, 1.55); g.translate(-L.x, -sy);
+      const sg = g.createRadialGradient(L.x, sy, 2, L.x, sy, sr);
+      sg.addColorStop(0, base + (0.11 * (L.inten || 1)) + ")");
+      sg.addColorStop(1, base + "0)");
+      g.fillStyle = sg; g.beginPath(); g.arc(L.x, sy, sr, 0, TAU); g.fill();
+      g.restore();
+    }
     g.restore();
   }
   g.restore();
@@ -1272,8 +1331,54 @@ function drawGame(){
   g.restore();
 
   drawWeather();
+  drawTakedownPush();      // push in on the WORLD only — before the HUD goes on
   drawHUD();
   drawPost();
+}
+
+/* ---------- TAKEDOWN CAMERA ----------
+   A silent choke was the most skilful thing in the game and it registered as a
+   thud and a stat. Now it lands: the world stops dead for a beat, the camera
+   leans in on the body, and time crawls back up to speed.
+
+   The push-in scales the FINISHED FRAME rather than the world transform. The
+   lightmap is half-res and the bloom quarter-res with their own camera maths —
+   zooming the world would desync all three and the lighting would slide off
+   the geometry. Scaling the composited image cannot desync anything, and it
+   happens before the HUD is drawn so the interface stays put. */
+let TD = { t: 0, dur: 0, x: 0, y: 0 }, _tdBuf = null, _tdBufG = null;
+function takedown(x, y, big){
+  TD.dur = big ? 0.5 : 0.36;
+  TD.t = TD.dur; TD.x = x; TD.y = y;
+  shake(big ? 6 : 4);
+}
+/* Time dilation. Near-freeze for the first fifth, then eased back to full
+   speed — a hit-stop that snaps back reads as impact; one that fades reads
+   as lag. */
+function tdScale(){
+  if (TD.t <= 0) return 1;
+  const p = 1 - TD.t / TD.dur;
+  if (p < 0.2) return 0.06;
+  const k = (p - 0.2) / 0.8;
+  return 0.06 + k * k * 0.94;
+}
+/* decremented with REAL dt, never the scaled one, or it would slow itself down
+   and never end */
+function tdUpdate(dt){ if (TD.t > 0) TD.t = Math.max(0, TD.t - dt); }
+function drawTakedownPush(){
+  if (TD.t <= 0) return;
+  const p = 1 - TD.t / TD.dur;
+  const z = 1 + 0.06 * Math.sin(Math.min(1, p * 1.5) * Math.PI);   // in, and back out
+  if (z <= 1.002) return;
+  if (!_tdBuf){ _tdBuf = document.createElement("canvas"); _tdBuf.width = W; _tdBuf.height = H; _tdBufG = _tdBuf.getContext("2d"); }
+  _tdBufG.setTransform(1, 0, 0, 1, 0, 0);
+  _tdBufG.clearRect(0, 0, W, H);
+  _tdBufG.drawImage(cv, 0, 0);
+  const fx = clamp(TD.x - camX, 0, W), fy = clamp(TD.y - camY, 0, H);
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+  g.translate(fx, fy); g.scale(z, z); g.translate(-fx, -fy);
+  g.drawImage(_tdBuf, 0, 0);
+  g.restore();
 }
 function drawDoor(d){
   const px = d.x * T, py = d.y * T;

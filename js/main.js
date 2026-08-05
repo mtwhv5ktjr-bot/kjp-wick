@@ -57,8 +57,12 @@ function gameUpdate(dt){
   const hitPause = MOUSE.pressed && MOUSE.x >= B.x && MOUSE.x <= B.x + B.w && MOUSE.y >= B.y && MOUSE.y <= B.y + B.h;
   if (PRESS.has("Escape") || hitPause){ STATE = "pause"; SFX.ui2(); return; }
   if (BOT) botUpdate(dt);
-  /* FOCUS slows the SIMULATION, never the input read — planning stays crisp */
-  const scale = focusScale(dt);
+  /* the takedown beat runs on REAL time so it cannot slow its own countdown */
+  tdUpdate(dt);
+  /* FOCUS slows the SIMULATION, never the input read — planning stays crisp.
+     The takedown hit-stop multiplies into the same scale so the two compose
+     instead of fighting over who owns time. */
+  const scale = focusScale(dt) * tdScale();
   entsUpdate(dt * scale);
   tutUpdate(dt);
 }

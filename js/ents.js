@@ -330,6 +330,7 @@ function _punch(){
       if (e.hits >= koAt){
         e.ko = isHunter(e) ? 16 : 25; e.st = isHunter(e) ? "hunt" : "patrol";
         e.detect = 0; SFX.thud(); LV.stats.kos++; _dropCard(e);
+        takedown(e.x, e.y, isHunter(e));   // putting the Director down earns the longer beat
         if (isHunter(e)) toast("THE DIRECTOR is down — he will not stay down", "#ff8f8f");
       }
       else SFX.hit();
@@ -394,6 +395,7 @@ function _interactions(dt){
       if (P.chokeT >= 1){
         e.ko = 9e9; e.detect = 0; e.radioT = -1; P.choke = null;
         SFX.thud(); LV.stats.kos++; _dropCard(e);
+        takedown(e.x, e.y, true);        // the silent choke is the skill shot — sell it
         addNoise(P.x, P.y, 45, "scuffle");
       }
     }
