@@ -64,6 +64,11 @@
 <script src="js/sandbox.js"></script>
 <script src="js/sandbox-draw.js"></script>
 <script src="js/render.js"></script>
+<!-- 3D world renderer. three.js is VENDORED, not loaded from a CDN: this game
+     has no build step and no dependencies, and a third-party script that can
+     go down or change under you is not something the renderer should rely on. -->
+<script src="vendor/three.min.js"></script>
+<script src="js/r3d.js"></script>
 <script src="js/tutorial.js"></script>
 <script src="js/screens.js"></script>
 <script src="js/readyroom.js"></script>

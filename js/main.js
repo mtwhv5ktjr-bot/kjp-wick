@@ -146,6 +146,7 @@ function safeFrame(now){
 }
 
 /* boot */
+r3dBoot();          // third person unless the machine can't, or ?view=2d
 reconcileSkin();
 (function boot(){
   const q = location.search;

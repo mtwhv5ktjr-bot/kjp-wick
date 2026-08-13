@@ -930,6 +930,17 @@ function drawGame(){
     if (shakeT <= 0) shakeAmp = 0;
   }
 
+  /* THE WORLD.
+     In 3D this is one call: three.js renders the floor into its own WebGL
+     canvas and blits it here, after which the world is ordinary pixels in this
+     2D context again — which is why everything below (thermal, weather, the
+     takedown push, the HUD, the whole post chain) needed no changes at all.
+     The 2D world pass is kept as the fallback for machines without WebGL. */
+  if (R3D.on && r3dFrame()){
+    /* cones cannot be floor polygons in a perspective view; the TAC-MAP radar
+       carries that information now, and the guard's own light does the rest */
+  } else {
+
   /* reset light layers */
   lmg.setTransform(1, 0, 0, 1, 0, 0);
   _geomV = geomVersion();          // doors are the only thing that reshapes shadows
@@ -1330,6 +1341,8 @@ function drawGame(){
   for (const ct of coneTints) drawConeTint(ct.e, ct.pts, ct.range, ct.fov, ct.f, ct.s, ct.st);
   g.restore();
 
+  }   /* end of the 2D world pass */
+
   drawWeather();
   drawTakedownPush();      // push in on the WORLD only — before the HUD goes on
   drawHUD();
@@ -1367,6 +1380,9 @@ function tdScale(){
 function tdUpdate(dt){ if (TD.t > 0) TD.t = Math.max(0, TD.t - dt); }
 function drawTakedownPush(){
   if (TD.t <= 0) return;
+  /* in 3D the camera itself dollies in (r3dCamera) — scaling the frame as well
+     would double the push and zoom the HUD along with it */
+  if (R3D.on) return;
   const p = 1 - TD.t / TD.dur;
   const z = 1 + 0.06 * Math.sin(Math.min(1, p * 1.5) * Math.PI);   // in, and back out
   if (z <= 1.002) return;
@@ -1847,11 +1863,21 @@ function drawTouchUI(){
 
 /* ---------- post: grade, grain, vignette, scanlines ---------- */
 let scanPat = null, grainPats = null;
+/* same colour, a third of the alpha */
+function r3dSoftGrade(rgba){
+  const m = /rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)/.exec(String(rgba));
+  return m ? "rgba(" + m[1] + "," + m[2] + "," + m[3] + "," + (parseFloat(m[4]) * 0.34).toFixed(3) + ")" : rgba;
+}
 function drawPost(){
   const th = LV ? themeOf() : THEMES.lobby;
-  /* per-theme color wash */
+  /* per-theme color wash.
+     In 3D the darkness comes from real lights and fog, not from a lightmap
+     multiply — laying the full grade on top of that darkened the level into
+     something you could not read. The wash still runs, at a third strength, so
+     each district keeps its colour identity without being buried. */
   g.globalCompositeOperation = "multiply";
-  g.fillStyle = th.gradeLo; g.fillRect(0, 0, W, H);
+  g.fillStyle = (R3D.on && LV && STATE === "game") ? r3dSoftGrade(th.gradeLo) : th.gradeLo;
+  g.fillRect(0, 0, W, H);
   g.globalCompositeOperation = "lighter";
   g.fillStyle = th.gradeHi; g.fillRect(0, 0, W, H);
   g.globalCompositeOperation = "source-over";
