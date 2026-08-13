@@ -3,7 +3,8 @@
   "builds": [
     { "src": "*.html", "use": "@vercel/static" },
     { "src": "js/**", "use": "@vercel/static" },
-    { "src": "assets/**", "use": "@vercel/static" }
+    { "src": "assets/**", "use": "@vercel/static" },
+    { "src": "vendor/**", "use": "@vercel/static" }
   ],
   "routes": [
     { "src": "/mint", "dest": "/mint.html" },
