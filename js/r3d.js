@@ -74,7 +74,10 @@ function r3dBuildLevel(){
   const S = R3D.scene;
   /* tear down the previous floor — a level change must not leak meshes */
   for (const o of [...S.children]) S.remove(o);
-  R3D.ents.clear(); R3D.lights = [];
+  R3D.ents.clear(); R3D.lights = []; R3D._plight = null;   // removed with the scene above
+  /* cone meshes were removed from the scene by the loop above — drop the map
+     too, or the next floor reuses meshes that are no longer parented */
+  R3D_CONES.clear();
 
   const th = themeOf();
   const wallTop = new THREE.Color(th.wallTop || "#2b3540");
@@ -231,19 +234,144 @@ function r3dMakeActor(kind){
     pulse.position.y = 34; pulse.name = "pulse";
     grp.add(pulse);
   }
-  const legs = new THREE.Mesh(new THREE.CapsuleGeometry(4.4, 12, 3, 8),
-    new THREE.MeshStandardMaterial({ color: 0x11151c, roughness: 0.9 }));
-  legs.position.y = 9; legs.castShadow = true; legs.name = "legs"; grp.add(legs);
+  /* Separate limbs so the walk cycle can actually be animated. They pivot from
+     the hip/shoulder, so each is built inside a pivot group with the mesh
+     hanging BELOW the origin — rotating the group then swings the limb from
+     the top the way a leg swings, instead of spinning it about its middle. */
+  const dark = new THREE.MeshStandardMaterial({ color: 0x11151c, roughness: 0.9 });
+  const limb = (name, x, y, len, rad, mat) => {
+    const pivot = new THREE.Object3D();
+    pivot.position.set(x, y, 0); pivot.name = name;
+    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(rad, len, 3, 8), mat);
+    mesh.position.y = -len / 2; mesh.castShadow = true;
+    pivot.add(mesh); grp.add(pivot);
+    return pivot;
+  };
+  limb("legL", -4.2, 18, 14, 3.6, dark);
+  limb("legR",  4.2, 18, 14, 3.6, dark);
+  const sleeve = new THREE.MeshStandardMaterial({ color: suit, roughness: 0.85 });
+  limb("armL", -9.5, 34, 12, 2.9, sleeve);
+  limb("armR",  9.5, 34, 12, 2.9, sleeve);
   return grp;
+}
+
+/* Drive the 3D limbs from the SAME stride accumulator and the same stance /
+   swing curves as the 2D renderer (_footOffset, _footLift). One source of
+   truth for cadence — if the walk is retuned it is retuned everywhere. */
+function r3dAnimate(a, ent, moving){
+  const stride = ent.stride || 0;
+  const c = (((stride % _STEP_CYC) + _STEP_CYC) % _STEP_CYC) / _STEP_CYC;
+  const swing = t => moving ? _footOffset(t) * 0.62 : 0;
+  const lift  = t => moving ? _footLift(t) * 0.30 : 0;
+  const set = (name, t, arm) => {
+    const p = a.getObjectByName(name);
+    if (!p) return;
+    /* NO extra negation here. Arms are already given the opposite leg's phase;
+       negating as well cancelled it out and swung each arm in step with the leg
+       on its own side, which is the walk of someone carrying a tray. */
+    p.rotation.x = swing(t) * (arm ? 0.68 : 1);
+    p.rotation.z = arm ? 0 : lift(t) * 0.4;
+  };
+  set("legL", c, false);
+  set("legR", (c + 0.5) % 1, false);
+  /* each arm takes the OPPOSITE leg's phase — that counter-swing is what stops
+     a walk reading as a shuffle */
+  set("armL", (c + 0.5) % 1, true);
+  set("armR", c, true);
+  /* the same two-per-cycle weight transfer the 2D body bob uses */
+  a.position.y += moving ? Math.sin(stride / _STEP_CYC * TAU * 2) * 0.9 : 0;
+}
+
+/* ------------------------------------------------------------- cones ----- */
+/* THE most important thing in the 3D view. Top-down, a guard's vision cone was
+   drawn as a floor polygon and every decision the player made came from
+   reading them. In perspective they cannot be a screen-space overlay any more,
+   so they become real floor geometry: the SAME conePoly() the 2D renderer
+   used, laid flat just above the ground, additive, coloured by the guard's
+   state. Without this the game is a shooter with invisible rules. */
+const R3D_CONES = new Map();
+function r3dConeMesh(key){
+  let m = R3D_CONES.get(key);
+  if (m) return m;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * 3 * 40), 3));
+  const mat = new THREE.MeshBasicMaterial({ color: 0x9ee6ff, transparent: true, opacity: 0.22,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  m = new THREE.Mesh(geo, mat);
+  m.renderOrder = 2;
+  R3D_CONES.set(key, m); R3D.scene.add(m);
+  return m;
+}
+/* fan of triangles from the eye out to each ray hit — the polygon is already
+   clipped to walls, so the cone stops at cover exactly as the guard's sight does */
+function r3dConeFill(mesh, ox, oy, pts, col, alpha){
+  const pos = mesh.geometry.attributes.position;
+  const n = Math.min(pts.length - 1, 39);
+  let i = 0;
+  for (let k = 0; k < n; k++){
+    const a = pts[k], b = pts[k + 1];
+    pos.array[i++] = ox;   pos.array[i++] = 1.6; pos.array[i++] = oy;
+    pos.array[i++] = a[0]; pos.array[i++] = 1.6; pos.array[i++] = a[1];
+    pos.array[i++] = b[0]; pos.array[i++] = 1.6; pos.array[i++] = b[1];
+  }
+  while (i < pos.array.length) pos.array[i++] = 0;
+  pos.needsUpdate = true;
+  mesh.geometry.setDrawRange(0, n * 3);
+  mesh.material.color.setHex(col);
+  mesh.material.opacity = alpha;
+  mesh.visible = true;
+}
+function r3dSyncCones(){
+  const seen = new Set();
+  const state = e => (e.st === "alert" || e.detect >= 1) ? [0xff4646, 0.30]
+                   : (e.st === "susp" || e.detect > 0.45) ? [0xffbe46, 0.26]
+                   : [0x9ee6ff, 0.15];
+  for (let i = 0; i < LV.guards.length; i++){
+    const e = LV.guards[i];
+    if (down(e)) continue;
+    const key = "g" + i; seen.add(key);
+    const range = e.range * (skinDef().detectMul || 1);
+    const [c, a] = state(e);
+    r3dConeFill(r3dConeMesh(key), e.x, e.y, conePoly(e, range, e.fov, 22), c, a);
+  }
+  for (let i = 0; i < LV.cams.length; i++){
+    const e = LV.cams[i];
+    if (e.dead) continue;
+    const key = "c" + i; seen.add(key);
+    const [c, a] = state(e);
+    r3dConeFill(r3dConeMesh(key), e.x, e.y, conePoly(e, e.range, 0.55, 16), c, a);
+  }
+  for (const [k, m] of R3D_CONES) if (!seen.has(k)) m.visible = false;
+}
+
+/* KJP'S OWN LIGHT.
+   The 2D renderer punched a 250-radius pool at the player every single frame —
+   lmLight(P.x, P.y, 250, 0.86) — and that pool is what made a dark floor
+   playable. Porting the fixtures but not this left THE ARCHIVES an unreadable
+   black frame. It is a light on him, not a torch: no cone, no direction, so it
+   does not become a second aiming mechanic. */
+function r3dPlayerLight(){
+  if (!R3D._plight){
+    R3D._plight = new THREE.PointLight(0xd8e6ff, 1.5, 340, 1.6);
+    R3D.scene.add(R3D._plight);
+  }
+  const l = R3D._plight;
+  if (!P || P.dead){ l.visible = false; return; }
+  l.visible = true;
+  l.position.set(P.x, 54, P.y);
+  /* dimmer while sneaking: the light is his own presence, and crouching in the
+     dark should LOOK darker as well as read as safer on the HUD */
+  l.intensity = P.sneak ? 0.95 : 1.5;
 }
 
 function r3dSyncEnts(){
   const S = R3D.scene, seen = new Set();
-  const put = (key, kind, x, y, ang, down, extra) => {
+  const put = (key, kind, x, y, ang, down, extra, ent, moving) => {
     seen.add(key);
     let a = R3D.ents.get(key);
     if (!a){ a = r3dMakeActor(kind); R3D.ents.set(key, a); S.add(a); }
     a.position.set(x, 0, y);
+    if (ent && !down) r3dAnimate(a, ent, !!moving);
     /* game angle 0 = +x; the model faces -Z. */
     a.rotation.y = -ang + Math.PI / 2;
     a.visible = true;
@@ -254,13 +382,13 @@ function r3dSyncEnts(){
     if (extra) extra(a);
   };
 
-  if (P && !P.dead) put("P", "player", P.x, P.y, P.ang, false);
+  if (P && !P.dead) put("P", "player", P.x, P.y, P.ang, false, null, P, P.moving);
   for (const e of LV.guards) put("g" + LV.guards.indexOf(e), e.kind, e.x, e.y, e.ang, down(e), a => {
     const pulse = a.getObjectByName("pulse");
     if (pulse) pulse.intensity = down(e) ? 0 : 1.0 + Math.sin(performance.now() / 260) * 0.5;
-  });
-  for (const e of LV.dogs) put("d" + LV.dogs.indexOf(e), "dog", e.x, e.y, e.ang, down(e));
-  for (const e of LV.civs) put("c" + LV.civs.indexOf(e), "civ", e.x, e.y, e.ang, down(e));
+  }, e, !!(e.path && e.pathI < e.path.length));
+  for (const e of LV.dogs) put("d" + LV.dogs.indexOf(e), "dog", e.x, e.y, e.ang, down(e), null, e, !!e.path);
+  for (const e of LV.civs) put("c" + LV.civs.indexOf(e), "civ", e.x, e.y, e.ang, down(e), null, e, !!e.path);
 
   for (const [k, a] of R3D.ents) if (!seen.has(k)) a.visible = false;
 }
@@ -298,8 +426,13 @@ function r3dCamera(){
     dolly = Math.sin(Math.min(1, p * 1.5) * Math.PI) * 46;
   }
   cam.position.set(R3D._cx + Math.cos(R3D._ca) * dolly, up - dolly * 0.25, R3D._cy + Math.sin(R3D._ca) * dolly);
-  const la = new THREE.Vector3(P.x + Math.cos(aim) * 120, 26, P.y + Math.sin(aim) * 120);
-  cam.lookAt(la);
+  /* Aim just ahead of and ABOVE him, not 120 units past his feet — that framed
+     the floor and pushed KJP into the corner of frame. Chest height keeps him
+     at lower-centre with the room he is walking into filling the shot, which
+     is the only framing that makes third person worth having. */
+  if (!R3D._la) R3D._la = new THREE.Vector3();
+  R3D._la.set(P.x + Math.cos(aim) * 58, 46, P.y + Math.sin(aim) * 58);
+  cam.lookAt(R3D._la);
   if (shakeT > 0 && OPT.shake){
     cam.position.x += (rnd() - 0.5) * shakeAmp * 1.6;
     cam.position.z += (rnd() - 0.5) * shakeAmp * 1.6;
@@ -332,6 +465,8 @@ function r3dFrame(){
   if (!LV) return false;
   if (R3D.level !== LV.n || !R3D.walls) r3dBuildLevel();
   r3dSyncEnts();
+  r3dSyncCones();
+  r3dPlayerLight();
   r3dCullLights();
   r3dCamera();
   R3D.renderer.render(R3D.scene, R3D.cam);
@@ -341,6 +476,23 @@ function r3dFrame(){
   g.clearRect(0, 0, W, H);
   g.drawImage(R3D.cv, 0, 0, W, H);
   return true;
+}
+
+/* WHERE THE SHOT LANDS, in screen space.
+   Top-down, the barrel pointed at the cursor and that was the whole aiming
+   story. In perspective the muzzle line and the screen centre are different
+   places, so the crosshair has to be projected from the world: cast the
+   weapon's own ray, take the point it stops at, and put the reticle there.
+   Anything else is a crosshair that lies about where you are shooting. */
+const _aimV = { v: null };
+function r3dAimScreen(){
+  if (!R3D.on || !R3D.cam || !P || !LV) return null;
+  if (!_aimV.v) _aimV.v = new THREE.Vector3();
+  const d = ray(P.x, P.y, P.ang, 900);
+  _aimV.v.set(P.x + Math.cos(P.ang) * d, 24, P.y + Math.sin(P.ang) * d);
+  _aimV.v.project(R3D.cam);
+  if (_aimV.v.z > 1) return null;                     // behind the camera
+  return { x: (_aimV.v.x * 0.5 + 0.5) * W, y: (-_aimV.v.y * 0.5 + 0.5) * H, dist: d };
 }
 
 /* Turn it on unless the machine cannot do it, or the player asked for the old

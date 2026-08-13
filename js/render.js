@@ -1544,6 +1544,31 @@ function drawHUD(){
     g.strokeStyle = "rgba(255,120,130,0.4)"; g.lineWidth = 1; heartPath(x, y, 10); g.stroke();
   }
 
+  /* RETICLE — only in 3D, and only where the shot actually lands. Turns red
+     when a body is in the line, which is the one piece of information the
+     top-down view gave for free and perspective takes away. */
+  if (R3D.on){
+    const aim = r3dAimScreen();
+    if (aim){
+      let hot = false;
+      for (const e of LV.guards.concat(LV.dogs)){
+        if (down(e)) continue;
+        const d = dist(P.x, P.y, e.x, e.y);
+        if (d < aim.dist + 18 && Math.abs(angDiff(P.ang, angTo(P.x, P.y, e.x, e.y))) < 0.14){ hot = true; break; }
+      }
+      const col = hot ? "#ff6b6b" : "rgba(230,241,255,0.72)";
+      g.strokeStyle = col; g.lineWidth = 1.6;
+      const r0 = 4, r1 = 11;
+      for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]){
+        g.beginPath();
+        g.moveTo(aim.x + Math.cos(a) * r0, aim.y + Math.sin(a) * r0);
+        g.lineTo(aim.x + Math.cos(a) * r1, aim.y + Math.sin(a) * r1);
+        g.stroke();
+      }
+      g.fillStyle = col; g.beginPath(); g.arc(aim.x, aim.y, 1.3, 0, TAU); g.fill();
+    }
+  }
+
   /* SPLIT — the clock against this floor's par, and the gap to your own best.
      `par` has been sitting in levels.js all along driving a silent time bonus;
      nothing ever showed it, so there was nothing to race. The colour is the
