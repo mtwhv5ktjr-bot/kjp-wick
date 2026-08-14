@@ -91,9 +91,12 @@ function r3dBuildLevel(){
   tex.colorSpace = THREE.SRGBColorSpace || undefined;
   tex.anisotropy = R3D.renderer.capabilities.getMaxAnisotropy();
   const fw = LV.w * T, fh = LV.h * T;
+  /* colour from PRE (decals + district grade carry over), normals generated to
+     the SAME tile grid PRE painted — grout you can see the light catch */
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(fw, fh),
-    new THREE.MeshStandardMaterial({ map: tex, roughness: th.spec ? 0.28 : 0.92, metalness: th.spec ? 0.18 : 0.02 })
+    new THREE.MeshStandardMaterial({ map: tex, normalMap: r3dFloorNormal(),
+      roughness: th.spec ? 0.28 : 0.92, metalness: th.spec ? 0.18 : 0.02 })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(fw / 2, 0, fh / 2);
@@ -110,7 +113,12 @@ function r3dBuildLevel(){
     if (c === "#" || c === "V") solid.push([x, y]);
   }
   const wg = new THREE.BoxGeometry(T, R3D.wallH, T);
-  const wm = new THREE.MeshStandardMaterial({ color: wallTop, roughness: 0.95, metalness: 0.03 });
+  /* PBR wall material per theme: colour + generated normal map + roughness.
+     Each wall box maps the full 0..1 UV, so the texture tiles per-tile —
+     which is exactly the scale form seams and panel lines should repeat at.
+     Tinted toward the theme's own wall colour so districts stay distinct. */
+  const wm = r3dMaterial(MAT_FOR_THEME[LV.def.theme] || "concrete",
+                         { color: wallTop.clone().lerp(new THREE.Color(0xffffff), 0.55) });
   const walls = new THREE.InstancedMesh(wg, wm, Math.max(1, solid.length));
   walls.castShadow = true; walls.receiveShadow = true;
   const m4 = new THREE.Matrix4();
@@ -125,9 +133,12 @@ function r3dBuildLevel(){
      the single clearest tell that you are looking at a floor plan with walls
      stood up rather than at an interior. Drawn dark and unlit. */
   /* BackSide only: visible from underneath, invisible from above. If the
-     camera ever rides up over a wall the roof must not black out the frame. */
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh),
-    new THREE.MeshStandardMaterial({ color: 0x0a0e14, roughness: 1, side: THREE.BackSide }));
+     camera ever rides up over a wall the roof must not black out the frame.
+     Acoustic-tile material with a repeating grid, so looking up reads as a
+     ceiling rather than a void painted grey. */
+  const cmat = r3dMaterial("ceiling", { side: THREE.BackSide, color: 0x687484 });
+  cmat.map.repeat.set(LV.w / 4, LV.h / 4);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), cmat);
   ceil.rotation.x = Math.PI / 2;
   ceil.position.set(fw / 2, R3D.wallH, fh / 2);
   S.add(ceil);
@@ -165,6 +176,7 @@ function r3dBuildLevel(){
      restart after a death it reads as a very bad one. */
   if (P){ R3D._cx = P.x - Math.cos(P.ang) * R3D.camDist; R3D._cy = P.y - Math.sin(P.ang) * R3D.camDist; R3D._ca = P.ang; }
   r3dBuildFurniture();
+  r3dBuildProps();
   R3D.level = LV.n;
 }
 
@@ -236,31 +248,42 @@ function r3dMakeActor(kind){
     pulse.position.y = 34; pulse.name = "pulse";
     grp.add(pulse);
   }
-  /* Separate limbs so the walk cycle can actually be animated. They pivot from
-     the hip/shoulder, so each is built inside a pivot group with the mesh
-     hanging BELOW the origin — rotating the group then swings the limb from
-     the top the way a leg swings, instead of spinning it about its middle. */
+  /* TWO-SEGMENT limbs. A single capsule swinging from the hip is a stick;
+     a thigh with a shin that flexes at the knee during the swing is a leg.
+     Each limb is upper-pivot → upper mesh → lower-pivot (at the joint) →
+     lower mesh, all hanging BELOW their origins so rotation swings from the
+     joint the way anatomy does. */
   const dark = new THREE.MeshStandardMaterial({ color: 0x11151c, roughness: 0.9 });
-  const limb = (name, x, y, len, rad, mat) => {
-    const pivot = new THREE.Object3D();
-    pivot.position.set(x, y, 0); pivot.name = name;
-    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(rad, len, 3, 8), mat);
-    mesh.position.y = -len / 2; mesh.castShadow = true;
-    pivot.add(mesh); grp.add(pivot);
-    return pivot;
+  const limb = (name, x, y, lu, ll, rad, mat) => {
+    const up = new THREE.Object3D();
+    up.position.set(x, y, 0); up.name = name;
+    const um = new THREE.Mesh(new THREE.CapsuleGeometry(rad, lu, 3, 8), mat);
+    um.position.y = -lu / 2; um.castShadow = true; up.add(um);
+    const lo = new THREE.Object3D();
+    lo.position.y = -lu; lo.name = name + "_lo";
+    const lm = new THREE.Mesh(new THREE.CapsuleGeometry(rad * 0.85, ll, 3, 8), mat);
+    lm.position.y = -ll / 2; lm.castShadow = true; lo.add(lm);
+    up.add(lo); grp.add(up);
+    return up;
   };
-  limb("legL", -4.2, 18, 14, 3.6, dark);
-  limb("legR",  4.2, 18, 14, 3.6, dark);
+  limb("legL", -4.2, 18, 8, 8, 3.6, dark);
+  limb("legR",  4.2, 18, 8, 8, 3.6, dark);
   const sleeve = new THREE.MeshStandardMaterial({ color: suit, roughness: 0.85 });
-  limb("armL", -9.5, 34, 12, 2.9, sleeve);
-  limb("armR",  9.5, 34, 12, 2.9, sleeve);
+  limb("armL", -9.5, 34, 7, 7, 2.9, sleeve);
+  const armR = limb("armR", 9.5, 34, 7, 7, 2.9, sleeve);
+  /* the weapon rides the right hand — a mount at the end of the forearm.
+     r3dSyncEnts swaps the gun mesh in when the sim's weapon changes. */
+  const mount = new THREE.Object3D();
+  mount.name = "gunMount";
+  mount.position.set(0, -8, -1.5);
+  armR.getObjectByName("armR_lo").add(mount);
   return grp;
 }
 
 /* Drive the 3D limbs from the SAME stride accumulator and the same stance /
    swing curves as the 2D renderer (_footOffset, _footLift). One source of
    truth for cadence — if the walk is retuned it is retuned everywhere. */
-function r3dAnimate(a, ent, moving){
+function r3dAnimate(a, ent, moving, aiming){
   const stride = ent.stride || 0;
   const c = (((stride % _STEP_CYC) + _STEP_CYC) % _STEP_CYC) / _STEP_CYC;
   const swing = t => moving ? _footOffset(t) * 0.62 : 0;
@@ -273,6 +296,15 @@ function r3dAnimate(a, ent, moving){
        on its own side, which is the walk of someone carrying a tray. */
     p.rotation.x = swing(t) * (arm ? 0.68 : 1);
     p.rotation.z = arm ? 0 : lift(t) * 0.4;
+    const lo = a.getObjectByName(name + "_lo");
+    if (lo){
+      /* the knee flexes through the swing and is straight in stance; the elbow
+         keeps a small constant bend — locked-straight arms read as a robot.
+         RAW _footLift here, not the 0.30-scaled foot drift: reusing the scaled
+         value gave a 20-degree knee, which is a limp, not a stride. */
+      const raw = moving ? _footLift(t) : 0;
+      lo.rotation.x = arm ? 0.3 + raw * 0.25 : raw * 0.95;
+    }
   };
   set("legL", c, false);
   set("legR", (c + 0.5) % 1, false);
@@ -280,6 +312,17 @@ function r3dAnimate(a, ent, moving){
      a walk reading as a shuffle */
   set("armL", (c + 0.5) % 1, true);
   set("armR", c, true);
+  /* AIM overrides the right arm entirely: forward, level, elbow straight, and
+     the support hand comes up. -PI/2 about X sends a hanging arm to -Z, which
+     is the way the model faces. */
+  if (aiming){
+    const ar = a.getObjectByName("armR"), arLo = a.getObjectByName("armR_lo");
+    const al = a.getObjectByName("armL"), alLo = a.getObjectByName("armL_lo");
+    if (ar){ ar.rotation.x = -Math.PI / 2 + 0.06; ar.rotation.z = 0; }
+    if (arLo) arLo.rotation.x = 0.04;
+    if (al){ al.rotation.x = -Math.PI / 2 + 0.34; al.rotation.z = 0.5; }
+    if (alLo) alLo.rotation.x = 0.5;
+  }
   /* the same two-per-cycle weight transfer the 2D body bob uses */
   a.position.y += moving ? Math.sin(stride / _STEP_CYC * TAU * 2) * 0.9 : 0;
 }
@@ -502,12 +545,19 @@ function r3dPlayerLight(){
 
 function r3dSyncEnts(){
   const S = R3D.scene, seen = new Set();
-  const put = (key, kind, x, y, ang, down, extra, ent, moving) => {
+  const put = (key, kind, x, y, ang, down, extra, ent, moving, gunCls, aiming) => {
     seen.add(key);
     let a = R3D.ents.get(key);
     if (!a){ a = r3dMakeActor(kind); R3D.ents.set(key, a); S.add(a); }
+    /* weapon in hand — swapped only when the sim's weapon actually changes */
+    const mount = a.getObjectByName("gunMount");
+    if (mount && a.userData.gunCls !== gunCls){
+      while (mount.children.length) mount.remove(mount.children[0]);
+      if (gunCls) mount.add(r3dGunMesh(gunCls));
+      a.userData.gunCls = gunCls;
+    }
     a.position.set(x, 0, y);
-    if (ent && !down) r3dAnimate(a, ent, !!moving);
+    if (ent && !down) r3dAnimate(a, ent, !!moving, !!aiming && !!gunCls);
     /* game angle 0 = +x; the model faces -Z. */
     a.rotation.y = -ang + Math.PI / 2;
     a.visible = true;
@@ -518,11 +568,17 @@ function r3dSyncEnts(){
     if (extra) extra(a);
   };
 
-  if (P && !P.dead) put("P", "player", P.x, P.y, P.ang, false, null, P, P.moving);
+  if (P && !P.dead){
+    /* KJP carries what the sim says he carries; he raises it when it has just
+       been fired — permanent shoulder-aim reads stiff on a stealth walk */
+    const cls = r3dGunClass(curWid());
+    put("P", "player", P.x, P.y, P.ang, false, null, P, P.moving, cls, P.fireT > 0);
+  }
   for (const e of LV.guards) put("g" + LV.guards.indexOf(e), e.kind, e.x, e.y, e.ang, down(e), a => {
     const pulse = a.getObjectByName("pulse");
     if (pulse) pulse.intensity = down(e) ? 0 : 1.0 + Math.sin(performance.now() / 260) * 0.5;
-  }, e, !!(e.path && e.pathI < e.path.length));
+  }, e, !!(e.path && e.pathI < e.path.length),
+     e.gun === "smg" ? "smg" : "pistol", e.st === "alert");
   for (const e of LV.dogs) put("d" + LV.dogs.indexOf(e), "dog", e.x, e.y, e.ang, down(e), null, e, !!e.path);
   for (const e of LV.civs) put("c" + LV.civs.indexOf(e), "civ", e.x, e.y, e.ang, down(e), null, e, !!e.path);
 
@@ -602,6 +658,8 @@ function r3dFrame(){
   if (R3D.level !== LV.n || !R3D.walls) r3dBuildLevel();
   r3dSyncEnts();
   r3dSyncFurniture();
+  r3dSyncProps();
+  r3dSyncDecals();
   r3dSyncShots();
   r3dSyncCones();
   r3dPlayerLight();
@@ -639,4 +697,5 @@ function r3dBoot(){
   if (/[?&]view=2d/.test(location.search)) { R3D.on = false; return; }
   R3D.on = r3dAvailable() && r3dInit();
   if (!R3D.on) console.warn("KJP: falling back to the 2D renderer");
+  else r3dProbeOverrides();          // dropped-in texture maps take over async
 }

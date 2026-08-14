@@ -935,6 +935,11 @@ function bulletsUpdate(dt){
       }
       if (c === "#" || c === " " || c === "V" || (c === "-" && !b.fromPlayer && rnd() < 0.4)){
         b.gone = true; fxSpark(b.x, b.y);
+        /* remember the impact so renderers can leave a mark — bounded, oldest
+           out first, so an hour-long firefight cannot grow the level state */
+        LV.wallHits = LV.wallHits || [];
+        LV.wallHits.push({ x: b.x, y: b.y, a: Math.atan2(b.vy, b.vx), dart: !!b.dart });
+        if (LV.wallHits.length > 64) LV.wallHits.shift();
         if (b.dart && b.fromPlayer) addNoise(b.x, b.y, 90, "dartwall");   // a dart *tick* is a lure
         break;
       }
