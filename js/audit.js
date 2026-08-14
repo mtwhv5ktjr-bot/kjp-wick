@@ -43,6 +43,7 @@ function _auditFrame(state, opts){
     const worldSpace = !!(m && (Math.abs(m.e) > 0.5 || Math.abs(m.f) > 0.5) && state === "game");
     size *= sc;
     boxes.push({ s, size, worldSpace, rotated: !!(m && Math.abs(m.b) > 0.01),
+                 ofBtn: !!window._auditBtnLabel,      // drawn BY btn() as its caption
                  x0: px, y0: py, x1: px + w * sc, y1: py + size });
   };
   g.fillText = function(t, x, y){ rec(t, x, y); return realFill.apply(this, arguments); };
@@ -82,6 +83,29 @@ function _auditFrame(state, opts){
       if (f > 0.22)
         warn.push({ kind: "TEXT/TEXT", detail: '"' + a.s.slice(0, 20) + '" x "' + b.s.slice(0, 20) + '" ' + Math.round(f * 100) + "%" });
     }
+  /* TEXT vs BUTTON.
+     The blind spot that let the title screen ship with "DIFFICULTY: OPERATIVE"
+     printed across the DAILY CONTRACT button: TEXT/TEXT and BTN/BTN were both
+     checked, and the case where a stray label lands on top of a control was
+     not. A label over a button is worse than two labels touching — it makes
+     the button look mislabelled. Text drawn as part of a button is excluded by
+     the containment test: a label INSIDE its own control is the normal case. */
+  for (const b of ui){
+    if (b.ofBtn) continue;                        // a button's own caption, by definition
+    for (const r of UIB){
+      if (!r.fromBtn) continue;                   // clickable region, not a captioned control
+      /* a label fully inside a control is a card caption (gear blurbs, stat
+         rows) — those are drawn deliberately within their own clickable area */
+      const inside = b.x0 >= r.x - 2 && b.x1 <= r.x + r.w + 2 && b.y0 >= r.y - 2 && b.y1 <= r.y + r.h + 2;
+      if (inside) continue;
+      const ox = Math.min(b.x1, r.x + r.w) - Math.max(b.x0, r.x);
+      const oy = Math.min(b.y1, r.y + r.h) - Math.max(b.y0, r.y);
+      if (ox <= 0 || oy <= 0) continue;
+      const f = (ox * oy) / Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
+      if (f > 0.22)
+        warn.push({ kind: "TEXT/BTN", detail: '"' + b.s.slice(0, 24) + '" over a button, ' + Math.round(f * 100) + "%" });
+    }
+  }
   /* clickable rects must not fight each other */
   for (let i = 0; i < UIB.length; i++)
     for (let j = i + 1; j < UIB.length; j++){

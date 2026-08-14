@@ -13,9 +13,19 @@ function btn(x, y, w2, h2, label, cb, o){
   g.lineWidth = 2; g.strokeRect(x + 1, y + 1, w2 - 2, h2 - 2);
   g.font = "900 " + (o.fs || 15) + "px Arial Black"; g.textAlign = "center";
   g.fillStyle = o.off ? "#54606e" : hot ? "#dfffe9" : "#9fd7b0";
+  /* Tell the layout audit that THIS string is the button's own caption, so its
+     TEXT/BTN check can flag a stray label lying across a control without
+     flagging every button for containing its own label. Geometry alone cannot
+     tell those two apart. */
+  window._auditBtnLabel = (window._auditBtnLabel || 0) + 1;
   g.fillText(label, x + w2 / 2, y + h2 / 2 + (o.fs || 15) * 0.36);
+  window._auditBtnLabel--;
   g.textAlign = "left";
-  UIB.push({ x, y, w: w2, h: h2, cb, off: o.off });
+  /* fromBtn marks a real control with its own caption. Hand-pushed UIB rects
+     (gear cards, arsenal tiles) are clickable REGIONS that legitimately carry
+     descriptive text across them, so the audit only tests stray labels against
+     these. */
+  UIB.push({ x, y, w: w2, h: h2, cb, off: o.off, fromBtn: true });
   return hot;
 }
 function dispatchClicks(){
@@ -221,17 +231,24 @@ function drawTitle(){
      the left edge to x=-41 */
   g.fillText(dailyLabel() + " · resets in " + fmtLeft(dailyLeft()), bx + bw / 2, r4 + bh + 13);
   g.textAlign = "left";
-  /* difficulty is a first-class fact on the front page, not a buried setting */
+  /* DIFFICULTY — a first-class fact on the front page, not a buried setting.
+     It used to be drawn at row4 + 8, which is exactly where the DAILY CONTRACT
+     button landed when the menu grew a fifth row: the audit's new TEXT/BTN
+     check caught it lying across the button at 92%. Above the menu now, and
+     merged into ONE string so the name and its blurb can never collide either
+     (they were two draws 150px apart, and "DIFFICULTY: BABA YAGA" is 145 wide). */
   const d = diff();
   g.font = "900 11px Arial Black"; g.fillStyle = "#ffd27c";
-  g.fillText("DIFFICULTY: " + d.name, bx, by + 4 * (bh + gap) + 8);
+  /* BESIDE the button column, not above it — above collided with the last line
+     of the mission text (75%), because there are only ~25px between the brief
+     and INFILTRATE. To the right of the buttons there is a clear channel
+     before the portrait. */
+  g.fillText("DIFFICULTY: " + d.name, bx + bw + 26, by + 18);
   g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
-  g.fillText("score ×" + d.scoreMul + " · " + d.blurb, bx + 150, by + 4 * (bh + gap) + 8);
-  /* wallet line */
+  g.fillText("score ×" + d.scoreMul + " · " + d.blurb, bx + bw + 26, by + 36);
+  /* wallet line — clear of the site-link chips, which occupy H-30 upward */
   g.font = "700 11px Verdana"; g.fillStyle = walletAddr ? "#7cf9a5" : "#7c8ba3";
-  /* pinned near the bottom: the menu grew a fifth row (DAILY / DEEP COVER)
-     and this used to sit inside it — the audit caught it at 81% */
-  g.fillText(walletStatus || (walletAddr ? "connected" : "wallet: not connected — ARSENAL to link your WICK guns + gear"), bx, H - 34);
+  g.fillText(walletStatus || (walletAddr ? "connected" : "wallet: not connected — ARSENAL to link your WICK guns + gear"), bx, H - 46);
   /* board */
   drawTitleBoard();
   g.font = "700 11px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
@@ -246,10 +263,12 @@ function drawTitleBoard(){
   g.font = "900 12px Arial Black"; g.fillStyle = "#7cf9a5";
   g.fillText("GLOBAL OPERATIVES", x + 12, y + 22);
   g.font = "700 11px Verdana";
-  if (!lbTop){ g.fillStyle = "#7c8ba3"; g.fillText(lbDown ? "board offline" : "…dialing", x + 12, y + 44); lbFetch(); }
+  let saidOffline = false;
+  if (!lbTop){ g.fillStyle = "#7c8ba3"; g.fillText(lbDown ? "board offline" : "…dialing", x + 12, y + 44); lbFetch(); saidOffline = lbDown; }
   else if (!lbTop.length){
     /* the distinction that matters: nobody has played, vs the board is DOWN */
     if (lbDown){
+      saidOffline = true;
       g.fillStyle = "#ff8f8f"; g.font = "900 11px Arial Black";
       g.fillText("⚠ BOARD OFFLINE", x + 12, y + 44);
       g.font = "700 10px Verdana"; g.fillStyle = "#9db4cc";
@@ -262,7 +281,9 @@ function drawTitleBoard(){
     g.fillText((i + 1) + ". " + nm, x + 12, y + 44 + i * 18);
     g.textAlign = "right"; g.fillText(e2.score.toLocaleString(), x + w2 - 10, y + 44 + i * 18); g.textAlign = "left";
   });
-  if (lbNote){
+  /* the panel already carries a full BOARD OFFLINE block when the store is
+     down — repeating it in the footer said the same thing twice */
+  if (lbNote && !saidOffline){
     g.font = "700 9px Verdana"; g.fillStyle = lbDown ? "#ff8f8f" : "#4a6a58";
     g.fillText(lbNote, x + 12, y + 162);
   }
@@ -280,6 +301,11 @@ const SITE_LINKS = [
 function drawSiteLinks(){
   const h2 = 22, y = H - h2 - 8;
   let x = 70;
+  /* Set our own alignment. drawTitle left textAlign on "center", which this
+     function inherited — so every chip label was centred on its own left edge
+     and sat half outside its box. A function that draws text must not depend
+     on what the caller happened to leave set. */
+  g.textAlign = "left";
   g.font = "900 10px Arial Black";
   for (const L of SITE_LINKS){
     /* measureText under-reports emoji in Arial Black, so the label spills out
