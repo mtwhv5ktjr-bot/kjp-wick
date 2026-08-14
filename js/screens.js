@@ -211,7 +211,13 @@ function drawTitle(){
   g.textAlign = "right"; g.fillText("kjp-game.wick.pics", W - 20, 17); g.textAlign = "left";
   /* menu */
   const bx = 74, by = 408, bw = 300, bh = 40, gap = 8;
-  btn(bx, by, bw, bh, "▶ INFILTRATE", () => { STATE = "select"; });
+  /* FIRST RUN IS SACRED. A first-timer used to be greeted by a wallet nag,
+     four token chips and a board they cannot post to — before moving one
+     tile. Until the first floor is cleared, INFILTRATE goes STRAIGHT to
+     floor 1 and every commercial surface stays out of the frame. The game
+     earns attention first; the economy introduces itself after. */
+  const fresh = clearedCount() === 0;
+  btn(bx, by, bw, bh, "▶ INFILTRATE", () => { if (fresh) startBrief(1); else STATE = "select"; });
   btn(bx, by + (bh + gap), bw / 2 - 5, bh, "🎭 SKINS", () => { STATE = "skins"; }, { fs: 13 });
   btn(bx + bw / 2 + 5, by + (bh + gap), bw / 2 - 5, bh, "🔫 ARSENAL", () => { STATE = "arsenal"; }, { fs: 13 });
   btn(bx, by + 2 * (bh + gap), bw / 2 - 5, bh, "🎖 DOSSIER", () => { STATE = "dossier"; }, { fs: 13 });
@@ -246,14 +252,22 @@ function drawTitle(){
   g.fillText("DIFFICULTY: " + d.name, bx + bw + 26, by + 18);
   g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
   g.fillText("score ×" + d.scoreMul + " · " + d.blurb, bx + bw + 26, by + 36);
-  /* wallet line — clear of the site-link chips, which occupy H-30 upward */
-  g.font = "700 11px Verdana"; g.fillStyle = walletAddr ? "#7cf9a5" : "#7c8ba3";
-  g.fillText(walletStatus || (walletAddr ? "connected" : "wallet: not connected — ARSENAL to link your WICK guns + gear"), bx, H - 46);
-  /* board */
-  drawTitleBoard();
-  g.font = "700 11px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
-  drawSiteLinks();
-  g.textAlign = "left";
+  /* wallet line — clear of the site-link chips, which occupy H-30 upward.
+     On a fresh profile this whole commercial layer is replaced by one honest
+     sentence: the game is free and the wallet is optional. The chips, the
+     wallet nag and the board come back after the first clear, when they mean
+     something. */
+  if (fresh){
+    g.font = "700 11px Verdana"; g.fillStyle = "#7cf9a5";
+    g.fillText("FREE TO PLAY — wallet optional, never required", bx, H - 46);
+  } else {
+    g.font = "700 11px Verdana"; g.fillStyle = walletAddr ? "#7cf9a5" : "#7c8ba3";
+    g.fillText(walletStatus || (walletAddr ? "connected" : "wallet: not connected — ARSENAL to link your WICK guns + gear"), bx, H - 46);
+    drawTitleBoard();
+    g.font = "700 11px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
+    drawSiteLinks();
+    g.textAlign = "left";
+  }
   dispatchClicks();
 }
 function drawTitleBoard(){
@@ -624,6 +638,23 @@ function drawDebrief(dt){
     btn(390, H - 120, 170, 52, "↻ REPLAY", () => { if (DB.daily) startDaily(); else startBrief(DB.n); });
     btn(580, H - 120, 170, 52, "☰ MENU", () => { STATE = "select"; });
     if (walletAddr) btn(770, H - 120, 260, 52, lbMsg || "📡 SUBMIT CAMPAIGN", () => submitScore(), { fs: 12 });
+    else {
+      /* THE CONVERSION MOMENT. The old behaviour at the peak of a player's
+         pride was silence — or worse, "holders only". Now the game does the
+         math for them against the real board and says exactly what a gun
+         buys: the right to make this rank official, forever. "Would be",
+         never "recorded" — the one word keeps it honest. */
+      lbFetch();
+      const myTotal = campaignScore();
+      if (myTotal > 0 && Array.isArray(lbTop) && lbTop.length){
+        const rank = 1 + lbTop.filter(e => (e.score || 0) > myTotal).length;
+        g.font = "900 13px Arial Black"; g.fillStyle = "#ffd27c";
+        g.fillText("▲ you would be #" + rank + " on the world board", 770, H - 148);
+        g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
+        g.fillText("posting needs one WICK gun NFT — one gun = one verified identity, no bots", 770, H - 132);
+      }
+      btn(770, H - 120, 260, 52, "🔫 GET A GUN ↗", () => openShop("https://mint.wick.pics"), { fs: 12 });
+    }
     btn(1046, H - 120, 174, 52, "🖼 CARD", () => shareCard(r, DB.n), { fs: 12 });
   }
   g.font = "700 11px Verdana"; g.fillStyle = "#57717f";

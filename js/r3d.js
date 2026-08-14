@@ -72,8 +72,28 @@ function r3dInit(){
 function r3dBuildLevel(){
   if (!R3D.ready || !LV) return;
   const S = R3D.scene;
-  /* tear down the previous floor — a level change must not leak meshes */
-  for (const o of [...S.children]) S.remove(o);
+  /* tear down the previous floor — and DISPOSE it. Removing from the scene
+     frees nothing on the GPU; textures climbed +3 per floor swap, which in
+     DEEP COVER (endless floor swaps) is an unbounded leak. Anything marked
+     userData.shared (the material cache, the blob texture, the ghost duct
+     material) survives; everything else — actor materials, floor canvases,
+     cone geometry — dies with the floor it belonged to. */
+  const kill = o => {
+    if (o.geometry) o.geometry.dispose();
+    const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of mats){
+      if (m.userData && m.userData.shared) continue;
+      for (const k of ["map", "normalMap", "roughnessMap", "emissiveMap", "alphaMap"]){
+        const t = m[k];
+        if (t && !(t.userData && t.userData.shared)) t.dispose();
+      }
+      m.dispose();
+    }
+  };
+  /* lights are not meshes — the key's shadow render target slips past the
+     mesh disposer and leaked one RT per floor swap */
+  if (R3D.key && R3D.key.shadow && R3D.key.shadow.map){ R3D.key.shadow.map.dispose(); R3D.key.shadow.map = null; }
+  for (const o of [...S.children]){ o.traverse(kill); S.remove(o); }
   R3D.ents.clear(); R3D.lights = []; R3D._plight = null;   // removed with the scene above
   R3D_SHOTS.pool = []; R3D_SHOTS.flash = null; R3D_SHOTS.lastN = 0;
   /* cone meshes were removed from the scene by the loop above — drop the map
@@ -156,10 +176,45 @@ function r3dBuildLevel(){
   const amb = new THREE.AmbientLight(0x8fa8c8, 0.55);
   S.add(amb);
   /* a soft key from above so walls have a top-to-bottom gradient and the room
-     has a direction, rather than everything being flat point-light falloff */
+     has a direction, rather than everything being flat point-light falloff.
+     IT CASTS. PCFSoftShadowMap has been enabled and every wall, desk and
+     actor flagged castShadow since the first 3D commit — with zero lights
+     actually casting, which is the single biggest "not a real 3D game" tell.
+     A tight ortho frustum FOLLOWS THE PLAYER (re-aimed in r3dCamera, snapped
+     to shadow texels so the map never swims); mobile keeps it off by default. */
   const key = new THREE.DirectionalLight(0xbfd4f0, 0.35);
+  key.castShadow = !IS_TOUCH && OPT.shadows !== false;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.left = -350; key.shadow.camera.right = 350;
+  key.shadow.camera.top = 350; key.shadow.camera.bottom = -350;
+  key.shadow.camera.near = 200; key.shadow.camera.far = 1600;
+  key.shadow.bias = -0.0005; key.shadow.normalBias = 2;
   key.position.set(fw * 0.3, 900, fh * 0.2);
-  S.add(key);
+  S.add(key); S.add(key.target);
+  R3D.key = key;
+  /* per-theme sun direction, fixed, so shadows agree across the floor */
+  R3D.keyOff = th.outdoor ? { x: 260, y: 900, z: 140 } : { x: 150, y: 900, z: 90 };
+
+  /* PMREM ENVIRONMENT. The lobby's marble is authored at roughness 0.28 and
+     until now had NOTHING to reflect — glossy materials without an
+     environment read as grey plastic. Captured from the level itself (no
+     actors exist yet at build time, which is exactly what we want), fog off
+     so the far walls don't smear into it. Previous target disposed — Deep
+     Cover swaps floors repeatedly and must not leak render targets. */
+  try {
+    const bakFog = S.fog; S.fog = null;
+    const pm = new THREE.PMREMGenerator(R3D.renderer);
+    const rt = pm.fromScene(S, 0.04);
+    if (R3D._pmremRT) R3D._pmremRT.dispose();
+    R3D._pmremRT = rt;
+    S.environment = rt.texture;
+    pm.dispose();
+    S.fog = bakFog;
+    /* reflection strength follows the floor's material story: wet/marble
+       districts gleam, carpet offices stay matte */
+    S.traverse(o => { if (o.isMesh && o.material && "envMapIntensity" in o.material)
+      o.material.envMapIntensity = th.spec ? 0.8 : 0.35; });
+  } catch(e){ console.warn("PMREM skipped: " + e.message); }
 
   /* fixtures: the SAME LIGHTS array the 2D renderer built, carrying the colour
      temperature, per-fixture intensity and dead flags from the art pass */
@@ -286,6 +341,25 @@ function r3dMakeActor(kind){
   for (const ch of [...grp.children])
     if (ch !== upper && ch.name !== "legL" && ch.name !== "legR" && ch.position.y >= 24) upper.add(ch);
   grp.add(upper);
+  /* BLOB SHADOW — the cheapest grounding there is: a soft radial dark under
+     every actor. When the real shadow map is on it fades to a faint contact
+     smudge (real shadows are directional, contact darkness is not — they
+     coexist in every AAA title); when shadows are off (mobile) it carries
+     the whole job. */
+  if (!R3D._blobTex){
+    const bc = document.createElement("canvas"); bc.width = bc.height = 64;
+    const bg = bc.getContext("2d");
+    const bgr = bg.createRadialGradient(32, 32, 4, 32, 32, 30);
+    bgr.addColorStop(0, "rgba(0,0,0,0.5)"); bgr.addColorStop(1, "rgba(0,0,0,0)");
+    bg.fillStyle = bgr; bg.fillRect(0, 0, 64, 64);
+    R3D._blobTex = new THREE.CanvasTexture(bc);
+    R3D._blobTex.userData.shared = true;        // one texture for every actor, every floor
+  }
+  const blob = new THREE.Mesh(new THREE.CircleGeometry(17, 16),
+    new THREE.MeshBasicMaterial({ map: R3D._blobTex, transparent: true, depthWrite: false }));
+  blob.rotation.x = -Math.PI / 2; blob.position.y = 0.8;
+  blob.renderOrder = 1; blob.name = "blob";
+  grp.add(blob);
   return grp;
 }
 
@@ -587,6 +661,11 @@ function r3dSyncEnts(){
        is out, which matters because dragging and hiding them is a mechanic */
     a.rotation.z = down ? Math.PI / 2 * 0.92 : 0;
     a.position.y = down ? 6 : 0;
+    const blob = a.getObjectByName("blob");
+    if (blob){
+      blob.visible = !down;
+      blob.material.opacity = (R3D.key && R3D.key.castShadow) ? 0.35 : 0.85;
+    }
     if (extra) extra(a);
   };
 
@@ -643,6 +722,17 @@ function r3dCamera(){
      legal there. */
   const back = inVent ? R3D._backS : Math.max(R3D.camMin, Math.min(R3D._backS, hit - 26));
   const up = R3D._upS;
+
+  /* the shadow frustum rides with KJP, snapped to texel increments — without
+     the snap every step makes the whole shadow map shimmer */
+  if (R3D.key){
+    const texel = 700 / 1024;
+    const sx = Math.round(P.x / texel) * texel, sz = Math.round(P.y / texel) * texel;
+    R3D.key.position.set(sx + R3D.keyOff.x, R3D.keyOff.y, sz + R3D.keyOff.z);
+    R3D.key.target.position.set(sx, 0, sz);
+    R3D.key.target.updateMatrixWorld();
+    R3D.key.castShadow = !IS_TOUCH && OPT.shadows !== false;
+  }
   const tx = P.x - Math.cos(R3D._ca) * back;
   const ty = P.y - Math.sin(R3D._ca) * back;
   R3D._cx += (tx - R3D._cx) * 0.22;

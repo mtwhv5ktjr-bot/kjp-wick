@@ -214,12 +214,26 @@ function r3dMaterial(name, opts){
   if (R3DMAT.cache.has(key)) return R3DMAT.cache.get(key);
   const gen = (MATGEN[name] || MATGEN.concrete)();
   const ov = k => R3DMAT.overrides.get(name + "_" + k);
+  /* CONTACT AO baked into the wall base. Where a wall meets the floor, light
+     has nowhere to bounce from — the darkened skirt is what glues geometry to
+     the ground. Applied only to GENERATED canvases: a dropped-in artist
+     texture is presumed to already carry its own occlusion. Ceiling is the
+     one material whose "bottom" is not a floor contact. */
+  if (!ov("color") && name !== "ceiling"){
+    const c2 = gen.color.getContext("2d"), S2 = gen.color.height;
+    const gr2 = c2.createLinearGradient(0, S2 - 44, 0, S2);
+    gr2.addColorStop(0, "rgba(0,0,0,0)"); gr2.addColorStop(1, "rgba(0,0,0,0.42)");
+    c2.fillStyle = gr2; c2.fillRect(0, S2 - 44, gen.color.width, 44);
+  }
   const m = new THREE.MeshStandardMaterial(Object.assign({
     map: _tex(ov("color") || gen.color, true),
     normalMap: _tex(ov("normal") || gen.normal, false),
     roughnessMap: _tex(ov("rough") || gen.rough, false),
     roughness: 1, metalness: name === "metal" ? 0.55 : 0.04
   }, opts || {}));
+  /* cached across floor rebuilds — the teardown disposer must never touch it */
+  m.userData.shared = true;
+  for (const t of [m.map, m.normalMap, m.roughnessMap]) if (t) t.userData.shared = true;
   R3DMAT.cache.set(key, m);
   return m;
 }

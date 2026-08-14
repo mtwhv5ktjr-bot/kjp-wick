@@ -265,8 +265,11 @@ function r3dSyncProps(){
      solid metal; the cutaway is for the crawler, not the room. */
   const inVent = P && tileAt(Math.floor(P.x / T), Math.floor(P.y / T)) === "V";
   const camX3 = R3D.cam ? R3D.cam.position.x : 0, camY3 = R3D.cam ? R3D.cam.position.z : 0;
-  if (!R3DW._ghostMat) R3DW._ghostMat = new THREE.MeshStandardMaterial({
-    color: 0x9aa4b2, transparent: true, opacity: 0.10, roughness: 0.35, metalness: 0.6, depthWrite: false });
+  if (!R3DW._ghostMat){
+    R3DW._ghostMat = new THREE.MeshStandardMaterial({
+      color: 0x9aa4b2, transparent: true, opacity: 0.10, roughness: 0.35, metalness: 0.6, depthWrite: false });
+    R3DW._ghostMat.userData.shared = true;      // survives floor teardown
+  }
   for (const m of R3DW.props){
     if (!m.userData.vent) continue;
     /* three states while crawling: the sections holding KJP or the CAMERA are
