@@ -302,7 +302,11 @@ function playerUpdate(dt){
 
   /* F: knock in place — or flick a COIN at the cursor to pull ears THERE.
      The coin stops at the first wall; the preview arc shows where it lands. */
-  if (PRESS.has("KeyF") && !chokeLock){
+  /* F near a held-up guard means INTERROGATE (handled in _interactions) —
+     without this gate the same press also flicked a coin across the room,
+     which is a comedy beat the wrong way round */
+  const _holding = LV.guards.some(e2 => e2.st === "heldup" && dist(P.x, P.y, e2.x, e2.y) < 150);
+  if (PRESS.has("KeyF") && !chokeLock && !_holding){
     /* the coin flies to the cursor's WORLD point — same unprojection as aim */
     const cwx = aw ? aw.x : camX + MOUSE.x, cwy = aw ? aw.y : camY + MOUSE.y;
     const aimD = IS_TOUCH ? 0 : dist(P.x, P.y, cwx, cwy);
@@ -394,6 +398,34 @@ function _fire(wid, wBase){
   addNoise(P.x, P.y, w.noise, w.noise > 200 ? "gun" : "quiet");
   if (w.noise > 200) shake(3);
 }
+/* What a held guard gives up, in order of what actually helps: the card
+   carrier if a card is still walking around, the nearest exhibit if not, and
+   failing those a WHISPER of the floor's next locked Black File line — the
+   meta-story leaking through the people who guard it. One answer per guard,
+   ever: intel is a resource, not a faucet. */
+function _octant(a){
+  const names = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
+  return names[Math.round(((a % TAU) + TAU) % TAU / (TAU / 8)) % 8];
+}
+function _interrogate(e){
+  const carrier = LV.guards.find(g2 => g2.card && !g2.cardDropped && !down(g2) && g2 !== e);
+  if (carrier)
+    return "the " + (carrier.kind === "officer" ? "OFFICER" : "one of us") + " carries the "
+      + (carrier.card === "y" ? "YELLOW" : carrier.card === "b" ? "BLUE" : "RED") + " card… he's "
+      + _octant(angTo(e.x, e.y, carrier.x, carrier.y)) + " of here";
+  let best = null, bd = 1e9;
+  for (const p of LV.picks){ if (p.k === "intel" && !p.got){ const dd = dist(e.x, e.y, p.x * T, p.y * T); if (dd < bd){ bd = dd; best = p; } } }
+  if (best)
+    return "there's an exhibit they don't log… " + _octant(angTo(e.x, e.y, best.x * T, best.y * T)) + " of here";
+  try {
+    if (typeof BLACKFILE !== "undefined" && BLACKFILE[LV.n]){
+      const found = bfFound(LV.n), lines = BLACKFILE[LV.n].lines;
+      if (found < lines.length) return "I shouldn't know this… '" + lines[found].slice(0, 44) + "…'";
+    }
+  } catch(err){}
+  return "I just work the floor, man. I don't KNOW anything";
+}
+
 function _dropCard(e){
   if (e.card && !e.cardDropped){
     e.cardDropped = true;
@@ -436,6 +468,47 @@ function _interactions(dt){
   for (const e of LV.guards){
     if (down(e) || dist(P.x, P.y, e.x, e.y) > 43) continue;
     if (Math.abs(angDiff(e.ang, angTo(e.x, e.y, P.x, P.y))) > 1.85) cand = e;
+  }
+  /* HOLD-UP: firearm out, behind him, further than choke range. The choke
+     keeps priority inside 43px — silent beats loud when both are on the
+     table. Darts cannot threaten anyone: a HUSH-9 to the back is a nap, not
+     a negotiation. */
+  const wNow = curW();
+  if (!cand && !wNow.melee && !wNow.dart){
+    for (const e of LV.guards){
+      if (down(e) || e.st === "heldup" || e.st === "alert") continue;
+      const d2 = dist(P.x, P.y, e.x, e.y);
+      if (d2 > 43 && d2 < 130
+          && Math.abs(angDiff(e.ang, angTo(e.x, e.y, P.x, P.y))) > 1.85
+          && Math.abs(angDiff(P.ang, angTo(P.x, P.y, e.x, e.y))) < 0.5
+          && los(P.x, P.y, e.x, e.y, false, false)){
+        P.ctx = "E — FREEZE HIM";
+        if (PRESS.has("KeyE") || (TOUCH.act && !P.actLatch)){
+          e.st = "heldup"; e.heldBreak = 0; e.detect = 0; e.radioT = -1; e.path = null;
+          P.actLatch = true;
+          SFX.susp(); toast("hands up — he's yours while the gun is on him", "#8fc7ff");
+        }
+        return;
+      }
+    }
+  }
+  /* a guard already held: E cuffs him quietly, F makes him talk (once) */
+  for (const e of LV.guards){
+    if (e.st !== "heldup" || dist(P.x, P.y, e.x, e.y) > 150) continue;
+    P.ctx = e.talked ? "E — CUFF" : "E — CUFF · F — INTERROGATE";
+    if (PRESS.has("KeyE") || (TOUCH.act && !P.actLatch)){
+      e.ko = 9e9; e.cuffed = true; e.st = "patrol"; e.detect = 0;
+      P.actLatch = true;
+      SFX.thud(); LV.stats.kos++; _dropCard(e);
+      takedown(e.x, e.y, false);
+      addNoise(P.x, P.y, 30, "scuffle");
+      toast("cuffed — quiet, but he is still a body someone can find", "#8fc7ff");
+    } else if (PRESS.has("KeyF") && !e.talked){
+      e.talked = true;
+      toast('"' + _interrogate(e) + '"', "#ffd27c");
+      SFX.ui2();
+    }
+    return;
   }
   if (cand){
     P.ctx = "E — CHOKE";
@@ -587,6 +660,26 @@ function playerHit(dmg, fromX, fromY){
 /* ---------- guards ---------- */
 function guardUpdate(e, dt){
   if (e.dead) return;
+  /* HELD UP — the MGS2 verb. Entered from _interactions when a firearm is
+     levelled at his back; an early-return state like sleep/ko, which is
+     exactly what makes it safe: no radio wind-up, no detection roll, no
+     patrol while a barrel is on him. Break the line of aim for more than a
+     second and he spins out shouting. */
+  if (e.st === "heldup"){
+    const w = curW();
+    const aimed = !P.dead && !w.melee && !w.dart && dist(P.x, P.y, e.x, e.y) < 280
+      && Math.abs(angDiff(P.ang, angTo(P.x, P.y, e.x, e.y))) < 0.6
+      && los(P.x, P.y, e.x, e.y, false, false);
+    if (aimed) e.heldBreak = 0;
+    else e.heldBreak = (e.heldBreak || 0) + dt;
+    if (e.heldBreak > 1){
+      e.st = "alert"; e.detect = 1; e.target = { x: P.x, y: P.y };
+      e.pop = "!"; e.popT = 1; LV.lastKnown = { x: P.x, y: P.y };
+      goCaution(e.x, e.y, 14); SFX.susp();
+      toast("he broke free — gun back on him or GO", "#ff8f8f");
+    }
+    return;
+  }
   if (e.sleep > 0){ e.sleep -= dt; if (e.sleep <= 0 && e.ko <= 0){ e.st = "search"; e.detect = 0.6; e.susT = 8; e.target = { x: e.x, y: e.y }; e.bodyRadio = null; e.radioT = -1; toast("a guard woke up", "#ff8f8f"); goCaution(e.x, e.y, 15); } return; }
   if (e.ko > 0){ e.ko -= dt; if (e.ko <= 0){ e.st = "search"; e.susT = 8; e.target = { x: e.x, y: e.y }; e.bodyRadio = null; e.radioT = -1; goCaution(e.x, e.y, 15); } return; }
   if (e.stagT > 0){ e.stagT -= dt; return; }

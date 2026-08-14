@@ -678,6 +678,16 @@ function r3dSyncEnts(){
   for (const e of LV.guards) put("g" + LV.guards.indexOf(e), e.kind, e.x, e.y, e.ang, down(e), a => {
     const pulse = a.getObjectByName("pulse");
     if (pulse) pulse.intensity = down(e) ? 0 : 1.0 + Math.sin(performance.now() / 260) * 0.5;
+    /* held up = hands straight overhead — the universal silhouette, readable
+       across the whole room, which is what makes the verb feel earned */
+    if (e.st === "heldup"){
+      for (const nm of ["armL", "armR"]){
+        const p = a.getObjectByName(nm);
+        if (p){ p.rotation.x = Math.PI - 0.35; p.rotation.z = nm === "armL" ? 0.25 : -0.25; }
+        const lo = a.getObjectByName(nm + "_lo");
+        if (lo) lo.rotation.x = -0.15;
+      }
+    }
   }, e, !!(e.path && e.pathI < e.path.length),
      e.gun === "smg" ? "smg" : "pistol", e.st === "alert");
   for (const e of LV.dogs) put("d" + LV.dogs.indexOf(e), "dog", e.x, e.y, e.ang, down(e), null, e, !!e.path);
