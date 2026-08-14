@@ -105,12 +105,13 @@ function r3dBuildLevel(){
 
   /* walls */
   /* tileAt is the global accessor; render.js's isWall is a local inside the
-     prerender closure and is not visible here. "#" is wall, "V" is a vent
-     block — both are solid geometry you cannot see or walk through. */
+     prerender closure and is not visible here. Only "#" is full wall now —
+     "V" vents were being built as solid wall, which made them an INVISIBLE
+     tunnel: the sneaking player passed through what looked like concrete.
+     They are ducts in r3d-world.js instead. */
   const solid = [];
   for (let y = 0; y < LV.h; y++) for (let x = 0; x < LV.w; x++){
-    const c = tileAt(x, y);
-    if (c === "#" || c === "V") solid.push([x, y]);
+    if (tileAt(x, y) === "#") solid.push([x, y]);
   }
   const wg = new THREE.BoxGeometry(T, R3D.wallH, T);
   /* PBR wall material per theme: colour + generated normal map + roughness.
@@ -277,15 +278,31 @@ function r3dMakeActor(kind){
   mount.name = "gunMount";
   mount.position.set(0, -8, -1.5);
   armR.getObjectByName("armR_lo").add(mount);
+  /* UPPER-BODY GROUP for the crouch. Everything above the hips — torso, head,
+     hair, shades, hands, arms — moves as one unit when KJP drops low; legs
+     stay planted and take the bend themselves. Collected by height rather
+     than by name so guard variants get it for free. */
+  const upper = new THREE.Group(); upper.name = "upper";
+  for (const ch of [...grp.children])
+    if (ch !== upper && ch.name !== "legL" && ch.name !== "legR" && ch.position.y >= 24) upper.add(ch);
+  grp.add(upper);
   return grp;
 }
 
 /* Drive the 3D limbs from the SAME stride accumulator and the same stance /
    swing curves as the 2D renderer (_footOffset, _footLift). One source of
    truth for cadence — if the walk is retuned it is retuned everywhere. */
-function r3dAnimate(a, ent, moving, aiming){
+function r3dAnimate(a, ent, moving, aiming, crouchT){
   const stride = ent.stride || 0;
   const c = (((stride % _STEP_CYC) + _STEP_CYC) % _STEP_CYC) / _STEP_CYC;
+  /* crouch is SMOOTHED, never snapped — standing up out of a vent in one
+     frame reads as a glitch, easing out of it reads as a movement */
+  const ck = a.userData.ck = (a.userData.ck || 0) + (((crouchT || 0) - (a.userData.ck || 0)) * 0.16);
+  const up = a.getObjectByName("upper");
+  if (up){
+    up.position.y = -12.5 * ck;                     // ck 1 = crouch, ck 2 = vent crawl
+    up.rotation.x = 0.24 * ck;                      // hunch forward over the knees
+  }
   const swing = t => moving ? _footOffset(t) * 0.62 : 0;
   const lift  = t => moving ? _footLift(t) * 0.30 : 0;
   const set = (name, t, arm) => {
@@ -294,16 +311,18 @@ function r3dAnimate(a, ent, moving, aiming){
     /* NO extra negation here. Arms are already given the opposite leg's phase;
        negating as well cancelled it out and swung each arm in step with the leg
        on its own side, which is the walk of someone carrying a tray. */
-    p.rotation.x = swing(t) * (arm ? 0.68 : 1);
+    p.rotation.x = swing(t) * (arm ? 0.68 : 1) + (arm ? 0 : -0.48 * ck);
     p.rotation.z = arm ? 0 : lift(t) * 0.4;
     const lo = a.getObjectByName(name + "_lo");
     if (lo){
       /* the knee flexes through the swing and is straight in stance; the elbow
          keeps a small constant bend — locked-straight arms read as a robot.
          RAW _footLift here, not the 0.30-scaled foot drift: reusing the scaled
-         value gave a 20-degree knee, which is a limp, not a stride. */
+         value gave a 20-degree knee, which is a limp, not a stride.
+         Crouch adds a standing bend to both joints — that squat is what makes
+         the lowered body read as legs folding rather than a model sinking. */
       const raw = moving ? _footLift(t) : 0;
-      lo.rotation.x = arm ? 0.3 + raw * 0.25 : raw * 0.95;
+      lo.rotation.x = arm ? 0.3 + raw * 0.25 : raw * 0.95 + 0.85 * ck;
     }
   };
   set("legL", c, false);
@@ -502,9 +521,12 @@ function r3dConeFill(mesh, ox, oy, pts, col, alpha){
 }
 function r3dSyncCones(){
   const seen = new Set();
-  const state = e => (e.st === "alert" || e.detect >= 1) ? [0xff4646, 0.30]
-                   : (e.st === "susp" || e.detect > 0.45) ? [0xffbe46, 0.26]
-                   : [0x9ee6ff, 0.15];
+  /* from crawl height the floor cones fill the whole view — halve them in a
+     vent so they read as light on the floor, not as green walls */
+  const vk = R3D._inVent ? 0.5 : 1;
+  const state = e => (e.st === "alert" || e.detect >= 1) ? [0xff4646, 0.30 * vk]
+                   : (e.st === "susp" || e.detect > 0.45) ? [0xffbe46, 0.26 * vk]
+                   : [0x9ee6ff, 0.15 * vk];
   for (let i = 0; i < LV.guards.length; i++){
     const e = LV.guards[i];
     if (down(e)) continue;
@@ -557,7 +579,7 @@ function r3dSyncEnts(){
       a.userData.gunCls = gunCls;
     }
     a.position.set(x, 0, y);
-    if (ent && !down) r3dAnimate(a, ent, !!moving, !!aiming && !!gunCls);
+    if (ent && !down) r3dAnimate(a, ent, !!moving, !!aiming && !!gunCls, ent.isPlayer ? (P.sneak ? (R3D._inVent ? 2 : 1) : 0) : 0);
     /* game angle 0 = +x; the model faces -Z. */
     a.rotation.y = -ang + Math.PI / 2;
     a.visible = true;
@@ -598,13 +620,29 @@ function r3dCamera(){
      frame becomes the flat inside of a box. Cast backwards from KJP and stop
      short of whatever it hits — the same ray() the guards see with, so the
      camera can never be somewhere the world says is solid. */
+  /* STANCE-AWARE FRAMING. Height, distance and FOV follow what the body is
+     doing: crawling a duct pulls the camera down inside the run, sneak lowers
+     and tightens it, running widens the lens. All smoothed — a camera that
+     snaps between stances is worse than one that never moves. */
+  const inVent = R3D._inVent;
+  const tgt = inVent ? { up: 30, back: 62, fov: 56 }
+            : P.sneak ? { up: 80, back: 148, fov: 58 }
+            : P.runHeld && P.moving ? { up: 108, back: 184, fov: 67 }
+            : { up: R3D.camHeight, back: R3D.camDist, fov: 62 };
+  R3D._upS = (R3D._upS || R3D.camHeight) + (tgt.up - (R3D._upS || R3D.camHeight)) * 0.10;
+  R3D._backS = (R3D._backS || R3D.camDist) + (tgt.back - (R3D._backS || R3D.camDist)) * 0.10;
+  if (Math.abs(cam.fov - tgt.fov) > 0.05){ cam.fov += (tgt.fov - cam.fov) * 0.08; cam.updateProjectionMatrix(); }
+
   const behind = R3D._ca + Math.PI;
-  const hit = ray(P.x, P.y, behind, R3D.camDist + 26);
+  const hit = ray(P.x, P.y, behind, R3D._backS + 26);
   /* never closer than camMin — a hard pull-in against a wall behind KJP put the
      lens inside his head. Below this the camera rises instead, looking over him
-     rather than through him. */
-  const back = Math.max(R3D.camMin, Math.min(R3D.camDist, hit - 26));
-  const up = R3D.camHeight;
+     rather than through him. EXCEPT inside a duct: every neighbouring vent
+     tile blocks sight, so the ray stops instantly and the clamp would shove
+     the camera back through the metal. The cutaway makes the close camera
+     legal there. */
+  const back = inVent ? R3D._backS : Math.max(R3D.camMin, Math.min(R3D._backS, hit - 26));
+  const up = R3D._upS;
   const tx = P.x - Math.cos(R3D._ca) * back;
   const ty = P.y - Math.sin(R3D._ca) * back;
   R3D._cx += (tx - R3D._cx) * 0.22;
@@ -623,7 +661,8 @@ function r3dCamera(){
      at lower-centre with the room he is walking into filling the shot, which
      is the only framing that makes third person worth having. */
   if (!R3D._la) R3D._la = new THREE.Vector3();
-  R3D._la.set(P.x + Math.cos(aim) * 58, 46, P.y + Math.sin(aim) * 58);
+  /* look height follows the stance too — a crawl looks along the duct floor */
+  R3D._la.set(P.x + Math.cos(aim) * 58, inVent ? 20 : P.sneak ? 36 : 46, P.y + Math.sin(aim) * 58);
   cam.lookAt(R3D._la);
   if (shakeT > 0 && OPT.shake){
     cam.position.x += (rnd() - 0.5) * shakeAmp * 1.6;
@@ -656,6 +695,7 @@ function r3dFrame(){
   if (!R3D.ready && !r3dInit()) { R3D.on = false; return false; }
   if (!LV) return false;
   if (R3D.level !== LV.n || !R3D.walls) r3dBuildLevel();
+  R3D._inVent = !!(P && tileAt(Math.floor(P.x / T), Math.floor(P.y / T)) === "V");
   r3dSyncEnts();
   r3dSyncFurniture();
   r3dSyncProps();
@@ -665,6 +705,11 @@ function r3dFrame(){
   r3dPlayerLight();
   r3dCullLights();
   r3dCamera();
+  /* AFTER the camera moves, not before: unprojecting the cursor through last
+     frame's matrix left a visible gap between the reticle and the true aim
+     point while the camera eased. One frame of input latency is the standard
+     price every engine pays; a lying crosshair is not. */
+  r3dMouseWorld();
   R3D.renderer.render(R3D.scene, R3D.cam);
   /* …and now it is just pixels in the 2D canvas again, so thermal, cone tints,
      weather, the HUD and the entire post chain run exactly as they always did */
@@ -680,6 +725,30 @@ function r3dFrame(){
    places, so the crosshair has to be projected from the world: cast the
    weapon's own ray, take the point it stops at, and put the reticle there.
    Anything else is a crosshair that lies about where you are shooting. */
+/* WHERE THE MOUSE POINTS, in world space.
+   Aiming used to map the cursor through the top-down camera (camX + MOUSE.x),
+   which in perspective is a different place from where the cursor visibly sits
+   — aim drifted from the reticle the further you looked. Unproject the cursor
+   ray through the REAL camera and intersect the aim plane at chest height.
+   The sim consumes this instead of the 2D mapping whenever 3D is on. */
+function r3dMouseWorld(){
+  if (!R3D.on || !R3D.cam || !LV) { R3D.aimWorld = null; return; }
+  const nx = (MOUSE.x / W) * 2 - 1, ny = -((MOUSE.y / H) * 2 - 1);
+  if (!R3D._mrayO){ R3D._mrayO = new THREE.Vector3(); R3D._mrayD = new THREE.Vector3(); }
+  /* FRESH matrix, not whatever render() left behind. matrixWorld only updates
+     inside render, so unprojecting here used last frame's camera — and because
+     aim feeds the camera which feeds aim, that one-frame error became a
+     PERMANENT 48px limit cycle between the reticle and the true aim point
+     rather than damping out. */
+  R3D.cam.updateMatrixWorld(true);
+  R3D._mrayO.setFromMatrixPosition(R3D.cam.matrixWorld);
+  R3D._mrayD.set(nx, ny, 0.5).unproject(R3D.cam).sub(R3D._mrayO).normalize();
+  const t = (24 - R3D._mrayO.y) / R3D._mrayD.y;          // aim plane = bullet height
+  if (!isFinite(t) || t <= 0){ R3D.aimWorld = null; return; }
+  R3D.aimWorld = { x: R3D._mrayO.x + R3D._mrayD.x * t,
+                   y: R3D._mrayO.z + R3D._mrayD.z * t };
+}
+
 const _aimV = { v: null };
 function r3dAimScreen(){
   if (!R3D.on || !R3D.cam || !P || !LV) return null;

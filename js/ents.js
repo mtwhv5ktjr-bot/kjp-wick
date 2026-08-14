@@ -205,6 +205,17 @@ function playerUpdate(dt){
   let mx = (KEYS.has("KeyD") || KEYS.has("ArrowRight") ? 1 : 0) - (KEYS.has("KeyA") || KEYS.has("ArrowLeft") ? 1 : 0);
   let my = (KEYS.has("KeyS") || KEYS.has("ArrowDown") ? 1 : 0) - (KEYS.has("KeyW") || KEYS.has("ArrowUp") ? 1 : 0);
   if (TOUCH.stick){ mx = TOUCH.stick.dx; my = TOUCH.stick.dy; }
+  /* CAMERA-RELATIVE MOVEMENT in third person. WASD used to be world-axis:
+     W was world-north even with the camera facing south, so the controls
+     reversed depending on which way you happened to look. W is now "where
+     the camera points", D is camera-right — for keys and the touch stick
+     both. The 2D view keeps world axes, which is correct for top-down. */
+  if (typeof R3D !== "undefined" && R3D.on && (mx || my)){
+    const fx = Math.cos(R3D._ca), fy = Math.sin(R3D._ca);
+    const wx = mx * -fy + -my * fx;
+    const wy = mx *  fx + -my * fy;
+    mx = wx; my = wy;
+  }
   const mlen = Math.hypot(mx, my);
   if (mlen > 1){ mx /= mlen; my /= mlen; }
   const chokeLock = !!P.choke, dragging = !!P.drag;
@@ -244,12 +255,21 @@ function playerUpdate(dt){
     if (best){ P.x = best.x; P.y = best.y; }
   }
 
-  /* aim: mouse, or touch aim-finger; soft aim assist on coarse pointers */
+  /* aim: mouse, or touch aim-finger; soft aim assist on coarse pointers.
+     In 3D the cursor is unprojected through the real camera (R3D.aimWorld) —
+     the top-down mapping put the aim point somewhere the cursor visibly
+     was not, and the drift grew with distance. */
+  const aw = (typeof R3D !== "undefined" && R3D.on && R3D.aimWorld) ? R3D.aimWorld : null;
   if (TOUCH.aim){
     const dx = TOUCH.aim.x - W / 2, dy = TOUCH.aim.y - H / 2;
-    if (Math.hypot(dx, dy) > 24) P.ang = Math.atan2(dy, dx);
+    if (Math.hypot(dx, dy) > 24){
+      const a = Math.atan2(dy, dx);
+      /* touch aim is a screen direction — in 3D, rotate it by the camera yaw
+         so "up on the pad" means "where the camera looks", matching WASD */
+      P.ang = aw !== null || (typeof R3D !== "undefined" && R3D.on) ? a + R3D._ca + Math.PI / 2 : a;
+    }
   } else if (!IS_TOUCH || MOUSE.moved > 4){
-    P.ang = angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
+    P.ang = aw ? angTo(P.x, P.y, aw.x, aw.y) : angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
   }
   if (OPT.aimAssist && (IS_TOUCH || focusOn)){
     let best = null, bd = 0.24;
@@ -283,12 +303,14 @@ function playerUpdate(dt){
   /* F: knock in place — or flick a COIN at the cursor to pull ears THERE.
      The coin stops at the first wall; the preview arc shows where it lands. */
   if (PRESS.has("KeyF") && !chokeLock){
-    const aimD = IS_TOUCH ? 0 : dist(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
+    /* the coin flies to the cursor's WORLD point — same unprojection as aim */
+    const cwx = aw ? aw.x : camX + MOUSE.x, cwy = aw ? aw.y : camY + MOUSE.y;
+    const aimD = IS_TOUCH ? 0 : dist(P.x, P.y, cwx, cwy);
     if (aimD < 70){
       SFX.knock(); addNoise(P.x, P.y, 175, "knock");
       fxRing(P.x, P.y, "#8fc7ff");
     } else {
-      const a = angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
+      const a = angTo(P.x, P.y, cwx, cwy);
       const reach = Math.min(300, aimD, ray(P.x, P.y, a, 300) - 10);
       LV.coins.push({ x: P.x, y: P.y, vx: Math.cos(a) * reach / 0.55, vy: Math.sin(a) * reach / 0.55, t: 0.55, spin: 0 });
       SFX.ui(); tutCoinThrown();

@@ -56,23 +56,108 @@ function _hedgeMesh(){
   return grp;
 }
 
+/* One InstancedMesh per desk PART, shared across every desk on the floor.
+   Each part's world matrix = desk transform x its local offset, composed with
+   two dummies. Same geometry, same variants, ~7 draw calls total instead of
+   ~7 per desk. */
+function _buildDeskInstances(desks){
+  const S = R3D.scene;
+  const wood = new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.7 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.8 });
+  const pap = new THREE.MeshStandardMaterial({ color: 0xd8dde4, roughness: 0.95 });
+  const mugM = new THREE.MeshStandardMaterial({ color: 0x7a4030, roughness: 0.6 });
+  const scrM = new THREE.MeshStandardMaterial({ color: 0x9adfff, emissive: 0x6ec3ff, emissiveIntensity: 0.9 });
+  const A = new THREE.Object3D(), B = new THREE.Object3D();
+  const parts = {
+    top:    { geo: new THREE.BoxGeometry(T - 8, 3.6, T - 12), mat: wood, at: [], shadow: true },
+    leg:    { geo: new THREE.BoxGeometry(3, 21, 3),            mat: dark, at: [] },
+    monitor:{ geo: new THREE.BoxGeometry(16, 11, 2),           mat: dark, at: [] },
+    screen: { geo: new THREE.PlaneGeometry(13.5, 8.5),         mat: scrM, at: [] },
+    paper:  { geo: new THREE.BoxGeometry(10, 0.5, 13),         mat: pap,  at: [] },
+    kb:     { geo: new THREE.BoxGeometry(15, 1.4, 6),          mat: dark, at: [] },
+    mug:    { geo: new THREE.CylinderGeometry(2.4, 2.4, 4, 10), mat: mugM, at: [] }
+  };
+  const put = (list, d, px, py, pz, ry) => {
+    A.position.set(d.x, 0, d.y); A.rotation.set(0, d.rot, 0); A.updateMatrix();
+    B.position.set(px, py, pz); B.rotation.set(0, ry || 0, 0); B.updateMatrix();
+    const m = new THREE.Matrix4().multiplyMatrices(A.matrix, B.matrix);
+    list.push(m);
+  };
+  for (const d of desks){
+    put(parts.top.at, d, 0, 21, 0);
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]])
+      put(parts.leg.at, d, sx * (T / 2 - 8), 10.5, sz * (T / 2 - 9));
+    if (d.variant === "monitor"){
+      put(parts.monitor.at, d, 0, 30, -6);
+      put(parts.screen.at, d, 0, 30, -4.8);
+    } else if (d.variant === "papers"){
+      for (let k = 0; k < 3; k++) put(parts.paper.at, d, -6 + k * 6, 23.2 + k * 0.5, (k % 2 ? 4 : -3), (k - 1) * 0.3);
+    } else if (d.variant === "keys"){
+      put(parts.kb.at, d, -4, 23.6, 4);
+      put(parts.mug.at, d, 13, 25, 3);
+    }
+  }
+  for (const key of Object.keys(parts)){
+    const p = parts[key];
+    if (!p.at.length) continue;
+    const im = new THREE.InstancedMesh(p.geo, p.mat, p.at.length);
+    p.at.forEach((m, i) => im.setMatrixAt(i, m));
+    im.instanceMatrix.needsUpdate = true;
+    if (p.shadow){ im.castShadow = true; im.receiveShadow = true; }
+    S.add(im); R3DW.props.push(im);
+  }
+}
+
 /* --------------------------------------------------------------- builder -- */
 function r3dBuildProps(){
   const S = R3D.scene, th = themeOf();
   R3DW.props = []; R3DW.glass = []; R3DW.cams = []; R3DW.chaos = [];
   R3DW.blood = []; R3DW.holes = [];
 
+  const desks = [];
   for (let y = 0; y < LV.h; y++) for (let x = 0; x < LV.w; x++){
     const c = tileAt(x, y);
     if (c === "-"){
       /* same variant hash the 2D painter uses, so the 3D desk carries the
          same monitor the floor art shows under it */
       const h = hash2(x * 3, y * 11);
-      const variant = th.mat === "grass" ? "hedge" : h < 0.34 ? "monitor" : h < 0.6 ? "papers" : h < 0.75 ? "keys" : "plain";
-      const m = variant === "hedge" ? _hedgeMesh() : _deskMesh(th, variant);
-      m.position.set(x * T + T / 2, 0, y * T + T / 2);
-      m.rotation.y = (hash2(x, y * 7) - 0.5) * 0.14;    // nothing in a real office is square
-      S.add(m); R3DW.props.push(m);
+      if (th.mat === "grass"){
+        const m = _hedgeMesh();
+        m.position.set(x * T + T / 2, 0, y * T + T / 2);
+        m.rotation.y = (hash2(x, y * 7) - 0.5) * 0.14;
+        S.add(m); R3DW.props.push(m);
+      } else {
+        /* desks are INSTANCED, not one Group each — 144 desks of ~7 meshes
+           was ~1000 draw calls and the whole reason the cubicle farm ran at
+           14ms p95. Placements are collected here, built in one pass below. */
+        desks.push({ x: x * T + T / 2, y: y * T + T / 2,
+                     rot: (hash2(x, y * 7) - 0.5) * 0.14,
+                     variant: h < 0.34 ? "monitor" : h < 0.6 ? "papers" : h < 0.75 ? "keys" : "plain" });
+      }
+    } else if (c === "V"){
+      /* AIR DUCT. The sim lets a sneaking player through these tiles and
+         nobody else; they were rendered as solid wall, i.e. an invisible
+         tunnel. A metal duct at crawl height says everything the tile rules
+         say: too low to walk, big enough to crawl, and you can see the run
+         of it across the room. Cutaway when KJP is inside (r3dSyncProps),
+         because a camera inside a closed box shows the box. */
+      const duct = new THREE.Mesh(new THREE.BoxGeometry(T, 34, T),
+        r3dMaterial("metal", { color: 0x9aa4b2 }));
+      duct.position.set(x * T + T / 2, 17, y * T + T / 2);
+      duct.castShadow = true;
+      duct.userData.vent = [x, y];
+      duct.userData.solidMat = duct.material;
+      S.add(duct); R3DW.props.push(duct);
+      /* dark grille on each open end so the entrance reads from a distance */
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+        if (tileAt(x + dx, y + dy) !== ".") continue;
+        const gr = new THREE.Mesh(new THREE.PlaneGeometry(T - 10, 24),
+          new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: 0.9,
+            emissive: 0x7cf9a5, emissiveIntensity: 0.05 }));
+        gr.position.set(x * T + T / 2 + dx * (T / 2 + 0.6), 15, y * T + T / 2 + dy * (T / 2 + 0.6));
+        gr.rotation.y = dx !== 0 ? Math.PI / 2 : 0;
+        S.add(gr); R3DW.props.push(gr);
+      }
     } else if (c === "="){
       /* glass: transparent pane the sim can shatter. Tracked per tile — when
          the grid says ".", the pane is gone. */
@@ -88,6 +173,8 @@ function r3dBuildProps(){
       S.add(pane); R3DW.glass.push(pane);
     }
   }
+
+  if (desks.length) _buildDeskInstances(desks);
 
   /* security cameras — shootable, so they must be visible and aimable */
   for (const cm of LV.cams){
@@ -173,6 +260,32 @@ function r3dSyncDecals(){
 
 /* --------------------------------------------------------------- sync ----- */
 function r3dSyncProps(){
+  /* DUCT CUTAWAY — when KJP is crawling a vent, the sections around him go
+     translucent so the camera can ride inside the run. From outside they stay
+     solid metal; the cutaway is for the crawler, not the room. */
+  const inVent = P && tileAt(Math.floor(P.x / T), Math.floor(P.y / T)) === "V";
+  const camX3 = R3D.cam ? R3D.cam.position.x : 0, camY3 = R3D.cam ? R3D.cam.position.z : 0;
+  if (!R3DW._ghostMat) R3DW._ghostMat = new THREE.MeshStandardMaterial({
+    color: 0x9aa4b2, transparent: true, opacity: 0.10, roughness: 0.35, metalness: 0.6, depthWrite: false });
+  for (const m of R3DW.props){
+    if (!m.userData.vent) continue;
+    /* three states while crawling: the sections holding KJP or the CAMERA are
+       hidden outright (a lens inside a translucent box just fills the frame
+       with grey — the first cut looked like fog), the sections next along the
+       run are ghosted so the duct still reads as a duct, and everything
+       further stays solid metal for anyone looking from the room. */
+    let state = 0;
+    if (inVent){
+      const dP = Math.hypot(m.position.x - P.x, m.position.z - P.y);
+      const dC = Math.hypot(m.position.x - camX3, m.position.z - camY3);
+      state = (dP < T * 0.75 || dC < T * 0.9) ? 2 : dP < T * 2.4 ? 1 : 0;
+    }
+    if (state !== m.userData.cut){
+      m.userData.cut = state;
+      m.visible = state !== 2;
+      m.material = state === 1 ? R3DW._ghostMat : m.userData.solidMat;
+    }
+  }
   for (const pane of R3DW.glass){
     const [x, y] = pane.userData.t;
     pane.visible = tileAt(x, y) === "=";           // shattered glass is GONE
