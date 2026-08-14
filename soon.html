@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KJP — BRIEFLY ADJOURNED</title>
+<meta name="description" content="Kenny John Pierre is briefly adjourned. Back shortly.">
+<meta property="og:title" content="KJP — BRIEFLY ADJOURNED">
+<meta property="og:description" content="Court is in recess. Back shortly.">
+<style>
+  :root{ --bg:#05070c; --ink:#e6f1ff; --green:#7cf9a5; --amber:#ffd27c; --dim:#7c8ba3; }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:Verdana,Geneva,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    padding:24px; overflow:hidden; position:relative;
+  }
+  /* the same rain the title screen runs, done in CSS so this page stays a
+     single file with no scripts and no dependencies */
+  .rain{ position:absolute; inset:0; overflow:hidden; pointer-events:none; opacity:.25; }
+  .rain i{ position:absolute; top:-12%; width:1px; height:70px;
+    background:linear-gradient(transparent,rgba(160,200,230,.55));
+    animation:fall linear infinite; }
+  @keyframes fall{ to{ transform:translateY(115vh); } }
+  .wrap{ position:relative; max-width:640px; width:100%; text-align:left; }
+  .stamp{
+    display:inline-block; border:2px solid #c95b64; color:#ff8f8f;
+    font:900 11px/1 "Arial Black",Impact,sans-serif; letter-spacing:3px;
+    padding:7px 11px; transform:rotate(-2deg); margin-bottom:26px;
+  }
+  h1{
+    font:900 clamp(38px,9vw,74px)/0.92 "Arial Black",Impact,sans-serif;
+    color:var(--green); margin:0 0 6px; letter-spacing:-1px;
+    text-shadow:0 0 34px rgba(124,249,165,.34);
+  }
+  .rule{ height:4px; width:190px; background:#c95b64; margin:16px 0 22px; }
+  h2{ font:900 15px/1.35 "Arial Black",Impact,sans-serif; color:var(--amber);
+      margin:0 0 16px; letter-spacing:.5px; }
+  p{ color:var(--dim); font-size:13.5px; line-height:1.65; margin:0 0 12px; }
+  .sig{ color:var(--green); font-weight:bold; }
+  .links{ margin-top:30px; display:flex; flex-wrap:wrap; gap:9px; }
+  a.chip{
+    border:1.5px solid #33506a; color:#9db4cc; text-decoration:none;
+    font:900 10px/1 "Arial Black",Impact,sans-serif; letter-spacing:1px;
+    padding:10px 13px; border-radius:3px; transition:.15s;
+  }
+  a.chip:hover{ border-color:var(--green); color:#dfffe9; background:rgba(28,74,48,.5); }
+  .foot{ margin-top:26px; color:#3d4854; font-size:10.5px; letter-spacing:1px; }
+</style>
+</head>
+<body>
+<div class="rain" aria-hidden="true">
+  <i style="left:6%;  animation-duration:1.1s; animation-delay:.0s"></i>
+  <i style="left:17%; animation-duration:1.5s; animation-delay:.4s"></i>
+  <i style="left:29%; animation-duration:1.2s; animation-delay:.9s"></i>
+  <i style="left:41%; animation-duration:1.7s; animation-delay:.2s"></i>
+  <i style="left:53%; animation-duration:1.3s; animation-delay:.7s"></i>
+  <i style="left:64%; animation-duration:1.6s; animation-delay:.1s"></i>
+  <i style="left:76%; animation-duration:1.2s; animation-delay:1.0s"></i>
+  <i style="left:88%; animation-duration:1.45s;animation-delay:.5s"></i>
+  <i style="left:95%; animation-duration:1.25s;animation-delay:.3s"></i>
+</div>
+
+<main class="wrap">
+  <div class="stamp">CLASSIFIED // KJP-ORIGIN // EYES ONLY</div>
+  <h1>BRIEFLY<br>ADJOURNED</h1>
+  <div class="rule"></div>
+  <h2>The court will resume shortly.</h2>
+  <p>
+    Counsel is filing a <b>brief</b>. The building is dark, the cameras are off,
+    and nobody is on the floor — which, frankly, is the first time this month
+    that has been true on purpose.
+  </p>
+  <p>Back shortly. Your scores, your gear and your NFTs are untouched.</p>
+  <p class="sig">See you in the courtroom.</p>
+
+  <div class="links">
+    <a class="chip" href="https://mint.wick.pics">🎒 GEAR MINT — STILL OPEN</a>
+    <a class="chip" href="https://games.wick.pics">🕹 ARCADE</a>
+    <a class="chip" href="https://wick.pics">$WICK</a>
+  </div>
+
+  <div class="foot">KENNY JOHN PIERRE — ATTORNEY AT LAW · DENIABLE ASSET · EXCOMMUNICADO</div>
+</main>
+</body>
+</html>

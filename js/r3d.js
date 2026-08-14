@@ -75,6 +75,7 @@ function r3dBuildLevel(){
   /* tear down the previous floor — a level change must not leak meshes */
   for (const o of [...S.children]) S.remove(o);
   R3D.ents.clear(); R3D.lights = []; R3D._plight = null;   // removed with the scene above
+  R3D_SHOTS.pool = []; R3D_SHOTS.flash = null; R3D_SHOTS.lastN = 0;
   /* cone meshes were removed from the scene by the loop above — drop the map
      too, or the next floor reuses meshes that are no longer parented */
   R3D_CONES.clear();
@@ -369,6 +370,54 @@ function r3dSyncFurniture(){
   }
 }
 
+/* ---------------------------------------------------------- gunfire ------ */
+/* A shooter where you cannot see the shots. LV.bullets and LV.darts were drawn
+   by the 2D pass and nothing replaced them, so a firefight was silent flashes
+   on the HUD and hearts disappearing. Tracers are drawn from a fixed POOL —
+   allocating a mesh per bullet during a firefight is exactly when you cannot
+   afford the garbage. */
+const R3D_SHOTS = { pool: [], flash: null, flashT: 0, lastN: 0 };
+function r3dTracer(i){
+  if (R3D_SHOTS.pool[i]) return R3D_SHOTS.pool[i];
+  const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false }));
+  m.renderOrder = 3;
+  R3D_SHOTS.pool[i] = m; R3D.scene.add(m);
+  return m;
+}
+function r3dSyncShots(dt){
+  const all = (LV.bullets || []).concat(LV.darts || []);
+  for (let i = 0; i < R3D_SHOTS.pool.length; i++) if (R3D_SHOTS.pool[i]) R3D_SHOTS.pool[i].visible = false;
+  all.forEach((b, i) => {
+    if (i > 63) return;
+    const m = r3dTracer(i);
+    const sp = Math.hypot(b.vx, b.vy) || 1;
+    /* stretched along travel so it reads as a streak, not a floating pellet */
+    const len = Math.min(46, sp * 0.055 + 12);
+    m.scale.set(2.2, 2.2, len);
+    m.position.set(b.x, 26, b.y);
+    m.rotation.set(0, Math.atan2(b.vx, b.vy), 0);
+    m.material.color.setHex(b.dart ? 0x9ee6ff : b.fromPlayer ? 0xbfffd0 : 0xffb46b);
+    m.visible = true;
+  });
+  /* MUZZLE FLASH: a new bullet this frame means someone fired. One light for
+     all of them — a firefight does not need eight lights, it needs one that
+     punches. */
+  if (!R3D_SHOTS.flash){
+    R3D_SHOTS.flash = new THREE.PointLight(0xffd9a0, 0, 260, 2);
+    R3D.scene.add(R3D_SHOTS.flash);
+  }
+  if (all.length > R3D_SHOTS.lastN){
+    const b = all[all.length - 1];
+    R3D_SHOTS.flash.position.set(b.x, 30, b.y);
+    R3D_SHOTS.flashT = 0.06;
+  }
+  R3D_SHOTS.lastN = all.length;
+  R3D_SHOTS.flashT = Math.max(0, R3D_SHOTS.flashT - (dt || 1 / 60));
+  R3D_SHOTS.flash.intensity = R3D_SHOTS.flashT > 0 ? 5.5 : 0;
+}
+
 /* ------------------------------------------------------------- cones ----- */
 /* THE most important thing in the 3D view. Top-down, a guard's vision cone was
    drawn as a floor polygon and every decision the player made came from
@@ -553,6 +602,7 @@ function r3dFrame(){
   if (R3D.level !== LV.n || !R3D.walls) r3dBuildLevel();
   r3dSyncEnts();
   r3dSyncFurniture();
+  r3dSyncShots();
   r3dSyncCones();
   r3dPlayerLight();
   r3dCullLights();
