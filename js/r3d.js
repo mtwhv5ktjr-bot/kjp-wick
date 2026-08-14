@@ -163,6 +163,7 @@ function r3dBuildLevel(){
      flying across the map to catch up — which reads as a bug, and on a level
      restart after a death it reads as a very bad one. */
   if (P){ R3D._cx = P.x - Math.cos(P.ang) * R3D.camDist; R3D._cy = P.y - Math.sin(P.ang) * R3D.camDist; R3D._ca = P.ang; }
+  r3dBuildFurniture();
   R3D.level = LV.n;
 }
 
@@ -280,6 +281,92 @@ function r3dAnimate(a, ent, moving){
   set("armR", c, true);
   /* the same two-per-cycle weight transfer the 2D body bob uses */
   a.position.y += moving ? Math.sin(stride / _STEP_CYC * TAU * 2) * 0.9 : 0;
+}
+
+/* --------------------------------------------------------- furniture ----- */
+/* Doors and interactables existed only as marks painted into the floor
+   texture, which is fine looking straight down and useless in perspective: a
+   closed door was invisible, and there was no way to see what to hack, take or
+   walk out of. These are the objects the game is actually ABOUT. */
+const R3D_FURN = { doors: [], items: [] };
+const DOOR_COL = { D: 0x6b7684, Y: 0xd8c24a, B: 0x4a8fd8, R: 0xd85a4a, C: 0x8a5ad8 };
+
+function r3dBuildFurniture(){
+  const S = R3D.scene;
+  R3D_FURN.doors = []; R3D_FURN.items = [];
+
+  for (const d of LV.doors){
+    const col = DOOR_COL[d.kind] || 0x6b7684;
+    /* thin along its own axis, a full tile across the opening */
+    const geo = d.vertical ? new THREE.BoxGeometry(9, R3D.wallH - 4, T)
+                           : new THREE.BoxGeometry(T, R3D.wallH - 4, 9);
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: col, roughness: 0.55, metalness: 0.35, emissive: col, emissiveIntensity: 0.10 }));
+    m.castShadow = true;
+    m.userData.d = d;
+    m.userData.home = { x: d.x * T + T / 2, y: (R3D.wallH - 4) / 2, z: d.y * T + T / 2 };
+    m.position.set(m.userData.home.x, m.userData.home.y, m.userData.home.z);
+    S.add(m); R3D_FURN.doors.push(m);
+  }
+
+  /* one shape language: everything you can USE stands up off the floor and
+     glows its own colour, so a terminal never reads as a filing cabinet */
+  const item = (x, y, geo, col, h, ref, kind) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: col, emissive: col, emissiveIntensity: 0.85, roughness: 0.4 }));
+    m.position.set(x, h, y);
+    m.userData = { ref, kind, baseY: h };
+    S.add(m); R3D_FURN.items.push(m);
+    /* a small light so it is findable in a dark room from across it */
+    const l = new THREE.PointLight(col, 0.5, 150, 2);
+    l.position.set(x, h + 10, y);
+    m.userData.light = l; S.add(l);
+    return m;
+  };
+  for (const t of LV.terms)
+    item(t.x * T + T / 2, t.y * T + T / 2, new THREE.BoxGeometry(20, 26, 14), 0x5ab4ff, 15, t, "term");
+  for (const f of LV.files)
+    item(f.x * T + T / 2, f.y * T + T / 2, new THREE.BoxGeometry(18, 22, 12), 0xffd27c, 13, f, "file");
+  for (const e of LV.exits)
+    item(e.x * T + T / 2, e.y * T + T / 2, new THREE.CylinderGeometry(12, 12, 46, 12), 0x7cf9a5, 24, e, "exit");
+  for (const p of LV.picks){
+    const col = p.k === "intel" ? 0xff9d5b : p.k === "med" ? 0xff6b8a
+              : p.k === "darts" ? 0x9ee6ff : (p.card === "y" ? 0xd8c24a : p.card === "b" ? 0x4a8fd8 : 0xd85a4a);
+    item(p.x * T + T / 2, p.y * T + T / 2, new THREE.BoxGeometry(11, 11, 11), col, 18, p, "pick");
+  }
+  for (const pn of LV.panels)
+    item(pn.x * T + T / 2, pn.y * T + T / 2, new THREE.BoxGeometry(16, 20, 10), 0xff6b6b, 12, pn, "panel");
+}
+
+function r3dSyncFurniture(){
+  for (const m of R3D_FURN.doors){
+    const d = m.userData.d, h = m.userData.home;
+    if (d.broken){ m.visible = false; continue; }
+    m.visible = true;
+    /* slide into the jamb as it opens — the same 0..1 the sim already tracks,
+       so what you see is exactly what blocks sight and movement */
+    const slide = (d.open || 0) * (T - 4);
+    if (d.vertical) m.position.set(h.x, h.y, h.z + slide);
+    else m.position.set(h.x + slide, h.y, h.z);
+  }
+  const t = performance.now() / 1000;
+  for (const m of R3D_FURN.items){
+    const r = m.userData.ref, k = m.userData.kind;
+    let show = true, spin = 0;
+    if (k === "pick"){ show = !r.got; spin = 1; }
+    else if (k === "term"){ show = true; m.material.emissiveIntensity = r.done ? 0.25 : 0.85; }
+    else if (k === "file"){ show = !LV.file; spin = 0.6; }
+    else if (k === "panel"){ show = !r.pulled; }
+    else if (k === "exit"){
+      /* the way out only lights up once it will actually open for you */
+      const open = (LV.hacks >= (LV.def.hacksNeed || 0) && (!LV.def.fileNeed || LV.file)) || LV.def.exfil;
+      m.material.emissiveIntensity = open ? 1.0 : 0.18;
+      if (m.userData.light) m.userData.light.intensity = open ? 0.9 : 0.12;
+    }
+    m.visible = show;
+    if (m.userData.light) m.userData.light.visible = show;
+    if (spin){ m.rotation.y = t * spin; m.position.y = m.userData.baseY + Math.sin(t * 2.2) * 2.5; }
+  }
 }
 
 /* ------------------------------------------------------------- cones ----- */
@@ -465,6 +552,7 @@ function r3dFrame(){
   if (!LV) return false;
   if (R3D.level !== LV.n || !R3D.walls) r3dBuildLevel();
   r3dSyncEnts();
+  r3dSyncFurniture();
   r3dSyncCones();
   r3dPlayerLight();
   r3dCullLights();
