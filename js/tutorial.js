@@ -11,22 +11,37 @@ let TUT = null;
    old version gated on TUT.t, so the choke lesson sat on screen for 52 seconds
    before it gave up. Nothing here waits longer than it takes to read it, and
    every step has a `skip` so the tutorial can never become a wall. */
+/* Every step carries BOTH scripts. A phone player was being told to press
+   WASD, C, F, G and E — keys their device does not have. The touch text
+   names the buttons that are actually on their screen (BTN_DEFS), selected
+   by the same IS_TOUCH the HUD already keys off. */
 const TUT_STEPS = [
-  { k: "move",  txt: "WASD / arrows to move",                        hint: "the yard is dark — dark is cover",
+  { k: "move",  txt: "WASD / arrows to move",                        tTxt: "drag anywhere on the LEFT half to move",
+    hint: "the yard is dark — dark is cover",
     ok: () => TUT.moved > 150, skip: () => TUT.stepT > 8 },
-  { k: "sneak", txt: "Hold C to SNEAK — slow, quiet, fits vents",    hint: "sneaking halves what they can see of you",
+  { k: "sneak", txt: "Hold C to SNEAK — slow, quiet, fits vents",    tTxt: "tap SNEAK — it stays on. Slow, quiet, fits vents",
+    hint: "sneaking halves what they can see of you",
     ok: () => TUT.sneakT > 0.8, skip: () => TUT.stepT > 9 },
-  { k: "look",  txt: "Those green cones are eyes. Stay out of them", hint: "amber = curious · red = made you",
+  { k: "look",  txt: "Those green cones are eyes. Stay out of them", tTxt: "Those green cones are eyes. Stay out of them",
+    hint: "amber = curious · red = made you",
     ok: () => TUT.stepT > 2.2 },
-  { k: "coin",  txt: "Aim away and press F to throw a COIN",         hint: "guards check the sound, not you",
+  { k: "coin",  txt: "Aim away and press F to throw a COIN",         tTxt: "aim away and tap KNOCK to toss a COIN",
+    hint: "guards check the sound, not you",
     ok: () => TUT.coins > 0, skip: () => TUT.stepT > 11 },
-  { k: "gear",  txt: "G cycles gadgets · V uses one",                hint: "EMP, smoke, lure, thermal, breach charge",
+  { k: "gear",  txt: "G cycles gadgets · V uses one",                tTxt: "GEAR cycles gadgets · USE fires one",
+    hint: "EMP, smoke, lure, thermal, breach charge",
     ok: () => TUT.stepT > 2.4 },
-  { k: "choke", txt: "Get BEHIND a guard and hold E to choke him",   hint: "then E again to STASH him in a bin — or take his UNIFORM",
+  { k: "choke", txt: "Get BEHIND a guard and hold E to choke him",   tTxt: "get BEHIND a guard and hold ACT to choke him",
+    hint: "then E again to STASH him in a bin — or take his UNIFORM",
+    tHint: "then ACT again to STASH him — or take his UNIFORM",
     ok: () => LV.stats.kos > 0, skip: () => TUT.stepT > 13 },
-  { k: "obj",   txt: "▸ is your objective. ★ on the TAC-MAP points at it", hint: "the exit glows once the work is done",
+  { k: "obj",   txt: "▸ is your objective. ★ on the TAC-MAP points at it", tTxt: "▸ is your objective. ★ on the TAC-MAP points at it",
+    hint: "the exit glows once the work is done",
     ok: () => TUT.stepT > 2.4 }
 ];
+/* one accessor so the drawer can never mix scripts */
+function tutTxt(s){ return IS_TOUCH ? (s.tTxt || s.txt) : s.txt; }
+function tutHint(s){ return IS_TOUCH ? (s.tHint || s.hint) : s.hint; }
 function tutStart(){
   let done = false;
   try{ done = !!localStorage.getItem("kjp_tut"); }catch(e){}
@@ -70,9 +85,9 @@ function drawTutorial(){
   brackets(bx, by, 520, 56, "rgba(143,199,255,0.55)", 9);
   g.textAlign = "center";
   g.font = "900 " + (OPT.bigText ? 16 : 14) + "px Arial Black"; g.fillStyle = "#e6f1ff";
-  g.fillText(s.txt, W / 2, by + 25);
+  g.fillText(tutTxt(s), W / 2, by + 25);
   g.font = "700 " + (OPT.bigText ? 12 : 10) + "px Verdana"; g.fillStyle = "#8fc7ff";
-  g.fillText(s.hint, W / 2, by + 43);
+  g.fillText(tutHint(s), W / 2, by + 43);
   /* progress pips — how much school is left */
   for (let i = 0; i < TUT_STEPS.length; i++){
     g.fillStyle = i < TUT.i ? "#7cf9a5" : i === TUT.i ? "#8fc7ff" : "rgba(120,140,160,0.3)";

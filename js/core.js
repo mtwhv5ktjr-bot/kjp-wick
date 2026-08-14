@@ -81,9 +81,24 @@ const BTN_DEFS = [
 ];
 const BTN_BY_K = {};
 for (const b of BTN_DEFS) BTN_BY_K[b.k] = b;
+/* CONTEXT FILTER. Nine simultaneous buttons on a 375px screen is a cockpit,
+   and most of them did nothing for a fresh player: WPN with nothing to swap
+   to, GEAR/USE with every gadget spent, FOCUS with the assist off. A button
+   that is not live is not drawn and not tappable — the HUD earns its
+   complexity as the player earns the systems. */
+function btnVisible(k){
+  if (!P || !LV) return true;
+  if (k === "wpn") return (P.weapons || []).length > 2;
+  if (k === "focus") return !!OPT.focus;
+  if (k === "gadget" || k === "use"){
+    const any = P.gads && P.gads.some(id => (P.gadN[id] || 0) > 0);
+    return !!any;
+  }
+  return true;
+}
 const touchPts = new Map();
 function touchBtnAt(x, y){
-  for (const b of BTN_DEFS) if (dist(x, y, b.x, b.y) < b.r + 12) return b.k;
+  for (const b of BTN_DEFS) if (btnVisible(b.k) && dist(x, y, b.x, b.y) < b.r + 12) return b.k;
   return null;
 }
 cv.addEventListener("pointerdown", e => {

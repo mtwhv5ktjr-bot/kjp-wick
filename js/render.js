@@ -1874,6 +1874,7 @@ function drawTouchUI(){
     g.beginPath(); g.arc(150, H - 150, 58, 0, TAU); g.stroke();
   }
   for (const b of BTN_DEFS){
+    if (!btnVisible(b.k)) continue;      // not live → not drawn, not tappable
     const on = b.toggle ? TOUCH[b.toggle] : b.hold ? TOUCH[b.hold] : false;
     /* a gadget button with nothing left in the tube should look empty */
     const gadEmpty = b.k === "use" && P && P.gads && (P.gadN[P.gads[P.gi]] | 0) <= 0;
