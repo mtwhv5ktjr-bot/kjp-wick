@@ -45,6 +45,7 @@ function deepEnter(){
   OPT.diff = deepDiffFor(DEEP.depth);
   bumpMods();
   startLevel(n);
+  applyAggravators();                  // the risk dial rides Deep Cover too
   toast("DEPTH " + DEEP.depth + " — " + (LEVELS[n] ? LEVELS[n].name : "") + " · " + (DIFFS[OPT.diff] || {}).name, "#ff9d5b");
 }
 /* cleared a floor: bank it and keep going down. No debrief between floors —

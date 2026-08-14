@@ -55,6 +55,11 @@ function drawScoreCard(r, n, mode){
     g.font = "900 22px Arial Black"; g.fillStyle = med.col;
     g.fillText("🏅 " + med.name, 230, 372);
   }
+  /* the aggravated stamp — the whole point of running the dial is the brag */
+  if (r.agg){
+    g.font = "900 18px Arial Black"; g.fillStyle = "#ff6b6b";
+    g.fillText(r.agg.name + "  ·  ×" + r.agg.mult, 60, 410);
+  }
 
   /* how it was done — the part that separates a good run from a fast one */
   const badges = [];

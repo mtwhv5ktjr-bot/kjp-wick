@@ -1038,6 +1038,9 @@ function bulletsUpdate(dt){
         LV.grid[ty][tx] = ".";           // glass shatters, everyone hears it
         SFX.glass(); addNoise(b.x, b.y, 260, "gun");
         fxShards(b.x, b.y); markDirty(tx, ty);
+        /* GLASS WIRED: every pane is on the alarm loop — breaking one is not
+           noise any more, it is a confession with your coordinates on it */
+        if (LV.aggGlassWired) bodyAlarm(b.x, b.y, "a WIRED pane");
         continue;
       }
       const d = doorAtT(tx, ty);
@@ -1066,8 +1069,10 @@ function bulletsUpdate(dt){
           propHit(pr, true); b.gone = true; hitProp = true; break;
         }
         if (hitProp) break;
-        /* lamps die to gunfire — darkness is a weapon */
+        /* lamps die to gunfire — darkness is a weapon. Unless the contract is
+           LIGHTS HOT: armoured fixtures, the darkness tool confiscated. */
         for (const L of LIGHTS){
+          if (LV.aggLightsHot) break;
           if (L.dead || L.em || dist(b.x, b.y, L.x, L.y) > 11) continue;
           L.dead = true; b.gone = true;
           SFX.glass(); fxSpark(L.x, L.y); fxShards(L.x, L.y);

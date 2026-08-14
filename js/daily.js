@@ -43,6 +43,45 @@ let DAILY = dailyPlan();
 let DAILY_RUN = false;
 let _dailyBakDiff = null;
 
+/* AGGRAVATED CONTRACTS — the risk dial (Hades Heat, StS Ascension school).
+   Three presets rather than a picker screen: the whole dial fits on one
+   button, and presets can be balanced as sets. The multiplier is applied
+   INSIDE computeResult BEFORE the SC.opMax clamp, so the server's 300k
+   ceiling can never be threatened no matter what stacks — the cap is the
+   proof, not the tuning. */
+const AGG_PRESETS = [
+  { name: "OFF",         mult: 1,    flags: {} },
+  { name: "☠ DIRECTOR",  mult: 1.25, flags: { director: 1 } },
+  { name: "☠☠ WOUNDED",  mult: 1.6,  flags: { director: 1, oneHeart: 1, noRadar: 1 } },
+  { name: "☠☠☠ FULL",    mult: 2.0,  flags: { director: 1, oneHeart: 1, noRadar: 1, lightsHot: 1, glassWired: 1, doubleDogs: 1 } },
+];
+function aggLevel(){ return Math.max(0, Math.min(AGG_PRESETS.length - 1, PROG.agg || 0)); }
+function aggPreset(){ return AGG_PRESETS[aggLevel()]; }
+function aggCycle(){ PROG.agg = (aggLevel() + 1) % AGG_PRESETS.length; saveProg(); }
+
+/* stamp the live level with the preset — called after startLevel so the
+   entities exist to be mutated */
+function applyAggravators(){
+  const p = aggPreset();
+  LV.aggMult = p.mult; LV.aggName = p.name;
+  const f = p.flags;
+  LV.aggNoRadar = !!f.noRadar; LV.aggLightsHot = !!f.lightsHot; LV.aggGlassWired = !!f.glassWired;
+  if (f.oneHeart){ P.hpMax = 1; P.hp = 1; P.plate = false; }
+  if (f.doubleDogs && LV.dogs.length)
+    for (const d of [...LV.dogs]) LV.dogs.push(Object.assign({}, d, { x: d.x + 26, y: d.y + 14 }));
+  if (f.director && !LV.guards.some(g2 => g2.kind === "director")){
+    /* drop him on a walkable tile far from spawn — mid-floor, hunting */
+    let best = null, bd = -1;
+    for (let y = 1; y < LV.h - 1; y++) for (let x = 1; x < LV.w - 1; x++){
+      if (tileAt(x, y) !== ".") continue;
+      const dd = dist(x * T, y * T, P.x, P.y);
+      if (dd > bd){ bd = dd; best = { x, y }; }
+    }
+    if (best) LV.guards.push(spawnGuard({ x: best.x, y: best.y, kind: "director",
+      route: [[best.x, best.y], [Math.max(1, best.x - 6), best.y]] }));
+  }
+}
+
 /* NOT YET POSTED TO THE SHARED BOARD, deliberately.
    The server already understands "daily-YYYYMMDD" modes — own ceiling, own
    lane, world-record ghosts — but it clamps mode with slice(0, 12), and
@@ -109,6 +148,8 @@ function startDaily(){
   OPT.diff = DAILY.diff;               // the contract sets the pressure, not the menu
   bumpMods();                          // the ban changes what the guns do
   startLevel(DAILY.lv);
+  applyAggravators();                  // the risk dial, applied to the live floor
+  if (LV.aggMult > 1) toast("AGGRAVATED " + LV.aggName + " — score ×" + LV.aggMult, "#ff6b6b");
 }
 /* Always restore what startDaily() borrowed. Called from finishLevel and from
    any exit back to the menus — leaving the player's difficulty silently

@@ -228,8 +228,15 @@ function drawTitle(){
   /* the two reasons to come back: one contract a day, and how deep you got.
      Split across one row so the menu keeps its height. */
   const r4 = by + 4 * (bh + gap);
-  btn(bx, r4, bw / 2 - 5, bh, dailyBest() > 0 ? "📅 DAILY — " + dailyBest().toLocaleString() : "📅 DAILY CONTRACT",
-      () => startDaily(), { fs: 12 });
+  /* the risk dial: one button, cycling presets — OFF, DIRECTOR, WOUNDED,
+     FULL. Presets over a picker screen: the dial fits in the row and each
+     step is a balanced set, not a menu of foot-guns. */
+  const aggW = 64;
+  btn(bx, r4, bw / 2 - 5 - aggW - 6, bh, dailyBest() > 0 ? "📅 DAILY — " + dailyBest().toLocaleString() : "📅 DAILY",
+      () => startDaily(), { fs: 11 });
+  const ap = aggPreset();
+  btn(bx + bw / 2 - 5 - aggW, r4, aggW, bh, aggLevel() ? ap.name : "☠ OFF",
+      () => aggCycle(), { fs: 9, danger: aggLevel() > 0 });
   btn(bx + bw / 2 + 5, r4, bw / 2 - 5, bh, deepBest() > 0 ? "🕳 DEEP COVER — D" + deepBest() : "🕳 DEEP COVER",
       () => startDeep(), { fs: 12 });
   g.font = "700 9px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
@@ -541,10 +548,14 @@ function computeResult(){
   score = Math.max(500, score);
   if (gold) score = Math.round(score * 1.25);
   score = Math.round(score * diff().scoreMul);                // the board pays for pressure
+  /* the AGGRAVATED dial pays too — applied BEFORE the ceiling, so the 300k
+     server bound stays a proof (opMax × 6 ops = 270k) no matter what stacks */
+  if (LV.aggMult > 1) score = Math.round(score * LV.aggMult);
   score = Math.min(score, SC.opMax);                          // never outgrow the board's ceiling
   const res = { score, time: LV.time, ghost, pacifist, combat: s.combats > 0, kills: s.kills, kos: s.kos,
                 intel: s.intel, intelMax: LV.picks.filter(q => q.k === "intel").length,
-                alarms: s.alarms, diff: OPT.diff };
+                alarms: s.alarms, diff: OPT.diff,
+                agg: LV.aggMult > 1 ? { name: LV.aggName, mult: LV.aggMult } : null };
   res.rank = rankFor(res);
   /* medal is purely the clock, so it is judged separately from rank — the best
      medal is always re-derived from the best TIME kept in PROG, not stored */
@@ -662,7 +673,12 @@ function drawDebrief(dt){
         g.font = "900 11px Arial Black"; g.fillStyle = "#ff9d5b";
         g.fillText("🔥 " + st.days + "-DAY STREAK" + (st.shields ? "  ·  🛡 ×" + st.shields : ""), bx2, by2 + 116);
       }
-      if (walletAddr) btn(770, H - 120, 260, 52, lbMsg || "📡 POST TO TODAY'S BOARD", () => submitScore(dailyMode(), dailyBest(), 1), { fs: 11 });
+      /* clean and aggravated runs live on DIFFERENT boards — a ×2 score next
+         to a clean one is not a comparison, it is noise */
+      const aggRun = !!(DB.r && DB.r.agg);
+      if (walletAddr) btn(770, H - 120, 260, 52,
+        lbMsg || (aggRun ? "📡 POST — AGGRAVATED BOARD" : "📡 POST TO TODAY'S BOARD"),
+        () => submitScore(aggRun ? dailyModeAggravated() : dailyMode(), DB.r.score, 1), { fs: 11 });
       else btn(770, H - 120, 260, 52, "🔫 GET A GUN TO POST ↗", () => openShop("https://mint.wick.pics"), { fs: 11 });
     }
     else if (walletAddr) btn(770, H - 120, 260, 52, lbMsg || "📡 SUBMIT CAMPAIGN", () => submitScore(), { fs: 12 });

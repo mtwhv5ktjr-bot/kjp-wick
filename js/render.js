@@ -1793,6 +1793,18 @@ function wrapText(txt, x, y, maxW, lh, col){
 }
 function drawRadar(){
   const RW = 180, RH = 126, rx = W - RW - 18, ry0 = 18;
+  /* NO RADAR contract: the panel stays, dead — an absent panel reads as a
+     bug, a dead one reads as a choice you made at the dial */
+  if (LV.aggNoRadar){
+    g.fillStyle = "rgba(4,9,7,0.82)"; g.fillRect(rx, ry0, RW, RH);
+    brackets(rx, ry0, RW, RH, "rgba(255,107,107,0.4)");
+    g.font = "900 10px Arial Black"; g.fillStyle = "#ff6b6b"; g.textAlign = "center";
+    g.fillText("— NO RADAR —", rx + RW / 2, ry0 + RH / 2 - 4);
+    g.font = "700 8px Verdana"; g.fillStyle = "#7a4a4a";
+    g.fillText("aggravated contract", rx + RW / 2, ry0 + RH / 2 + 12);
+    g.textAlign = "left";
+    return;
+  }
   g.fillStyle = "rgba(4,9,7,0.82)"; g.fillRect(rx, ry0, RW, RH);
   brackets(rx, ry0, RW, RH, "rgba(124,249,165,0.45)");
   g.font = "900 8px Arial Black"; g.fillStyle = "#4a6a58";
