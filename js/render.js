@@ -190,12 +190,17 @@ function prerenderLevel(){
        same middling brightness average out to fog. Contrast is the whole
        point — some fixtures should be bright enough to be worth avoiding. */
     const inten = 0.55 + h1 * 0.45;
-    /* three temperatures: tired fluorescent green-white, clean white, old amber */
+    /* CYBERPUNK TEMPERATURES. The old three (fluorescent, cream, amber) read
+       as "office at night"; Langley after dark now runs the Agency's money
+       on neon — a quarter of the fixtures burn cyan, a fifth magenta, and
+       the rest keep the institutional white/amber so the neon stays SPECIAL.
+       Deterministic per position, like everything else in the bake. */
     const temp = hash2(x * 5, y * 11);
     const col = th.outdoor ? null
-      : temp < 0.30 ? "rgba(214,236,255,"
-      : temp < 0.72 ? "rgba(255,236,200,"
-      :               "rgba(255,196,120,";
+      : temp < 0.24 ? "rgba(110,235,255,"      // cyan — the signature
+      : temp < 0.42 ? "rgba(255,96,214,"       // magenta — the counterpoint
+      : temp < 0.78 ? "rgba(226,240,255,"      // clean white, brightened
+      :               "rgba(255,200,130,";     // amber survivors
     LIGHTS.push({ x: x * T + T / 2, y: y * T + T / 2, r, warm, ar, rot, inten, col,
                   flick: hash2(x * 9, y) < 0.08,
                   /* a few fixtures are simply out — dark patches are what make
@@ -1934,10 +1939,13 @@ function drawPost(){
   g.globalCompositeOperation = "lighter";
   g.fillStyle = th.gradeHi; g.fillRect(0, 0, W, H);
   g.globalCompositeOperation = "source-over";
-  /* vignette */
+  /* vignette — softened in 3D: the world already carries fog and real
+     shadows, and the heavy 2D-era vignette was eating a third of the
+     brightness the tone-mapping pass just bought */
+  const vigA = (R3D.on && LV && STATE === "game") ? 0.34 : 0.6;
   const grad = g.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, H * 0.86);
   grad.addColorStop(0, "rgba(0,0,0,0)");
-  grad.addColorStop(1, "rgba(2,4,8,0.6)");
+  grad.addColorStop(1, "rgba(2,4,8," + vigA + ")");
   g.fillStyle = grad; g.fillRect(0, 0, W, H);
   /* grain */
   if (!grainPats){

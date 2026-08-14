@@ -56,6 +56,13 @@ function r3dInit(){
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+  /* ACES filmic + raised exposure — the single biggest "why is it so murky"
+     fix. Linear output crushed the mids; ACES rolls highlights off like film
+     and lets the exposure come up without neon clipping to white. The sim's
+     light-detection reads the LIGHTS list, never pixels, so brightening the
+     PICTURE changes nothing about what guards can see. */
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.55;
 
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(62, W / H, 4, 4200);
@@ -167,15 +174,23 @@ function r3dBuildLevel(){
 
   /* Fog does the job the 2D vignette used to: it stops sightlines running the
      length of the building and hides the far wall of a 46-tile floor. Tied to
-     the theme's own ambient so a dark district fogs closer. */
-  S.fog = new THREE.Fog(new THREE.Color(th.gradeLo ? r3dRgb(th.gradeLo) : 0x0a1018),
-                        260, 300 + (1 - (th.ambient || 0.8)) * 1400);
+     the theme's own ambient so a dark district fogs closer — and pulled
+     toward violet, because distance dissolving into purple haze instead of
+     grey murk is half of what "cyberpunk" means visually. */
+  const fogBase = new THREE.Color(th.gradeLo ? r3dRgb(th.gradeLo) : 0x0a1018)
+    .lerp(new THREE.Color(0x2a1a4a), 0.45);
+  S.fog = new THREE.Fog(fogBase, 300, 380 + (1 - (th.ambient || 0.8)) * 1500);
 
-  /* Ambient floor of light. The 2D renderer got its darkness from the lightmap;
-     here the lights do that, so this only has to stop unlit faces reading as
-     pure black. The first pass at (1-ambient)*0.9 left the level unreadable. */
-  const amb = new THREE.AmbientLight(0x8fa8c8, 0.55);
+  /* Ambient floor of light — raised for the cyberpunk pass, and TINTED: a
+     cool violet-blue base is what makes neon accents read as neon instead of
+     as colored bulbs in a grey room. Darkness is still the stealth read; it
+     is just no longer mud. */
+  const amb = new THREE.AmbientLight(0x9a92d8, 0.72);
   S.add(amb);
+  /* a low hemisphere splits sky/ground tones — cyan wash from above, warm
+     reflected floor from below. Two lines, the whole room gets depth. */
+  const hemi = new THREE.HemisphereLight(0x66c8e8, 0x3a2a48, 0.30);
+  S.add(hemi);
   /* a soft key from above so walls have a top-to-bottom gradient and the room
      has a direction, rather than everything being flat point-light falloff.
      IT CASTS. PCFSoftShadowMap has been enabled and every wall, desk and
@@ -218,14 +233,40 @@ function r3dBuildLevel(){
   } catch(e){ console.warn("PMREM skipped: " + e.message); }
 
   /* fixtures: the SAME LIGHTS array the 2D renderer built, carrying the colour
-     temperature, per-fixture intensity and dead flags from the art pass */
+     temperature, per-fixture intensity and dead flags from the art pass.
+     Neon tubes throw HARDER than office panels — saturated light is the point
+     of having them. */
   for (const L of LIGHTS){
     if (L.dead) continue;
     const col = new THREE.Color(r3dLightColor(L, th));
-    const pl = new THREE.PointLight(col, (L.inten || 0.75) * 1.5, L.r * 1.35, 1.7);
+    const neon = L.col && /110,235,255|255,96,214/.test(L.col);
+    const pl = new THREE.PointLight(col, (L.inten || 0.75) * (neon ? 2.6 : 1.5), L.r * (neon ? 1.6 : 1.35), 1.7);
     pl.position.set(L.x, R3D.wallH * 0.82, L.y);
     pl.userData.src = L;
     S.add(pl); R3D.lights.push(pl);
+  }
+  /* THE TUBES THEMSELVES. Light pools with no visible source read as a bug;
+     a magenta bar burning on the ceiling reads as a place. One InstancedMesh,
+     per-instance colour, emissive-only — the cheapest possible neon. */
+  {
+    const tubeGeo = new THREE.BoxGeometry(30, 2.2, 7);
+    const tubeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const live = LIGHTS.filter(L => !L.dead && !L.em);
+    if (live.length){
+      const tubes = new THREE.InstancedMesh(tubeGeo, tubeMat, live.length);
+      const m4b = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1);
+      const up = new THREE.Vector3(0, 1, 0);
+      live.forEach((L, i) => {
+        q.setFromAxisAngle(up, L.rot || 0);
+        const stretch = sc.clone().setX(L.ar && L.ar > 1.4 ? L.ar * 0.9 : 1);
+        m4b.compose(new THREE.Vector3(L.x, R3D.wallH - 2.5, L.y), q, stretch);
+        tubes.setMatrixAt(i, m4b);
+        tubes.setColorAt(i, new THREE.Color(r3dLightColor(L, th)).multiplyScalar(1.6));
+      });
+      tubes.instanceMatrix.needsUpdate = true;
+      if (tubes.instanceColor) tubes.instanceColor.needsUpdate = true;
+      S.add(tubes);
+    }
   }
   /* SNAP the camera to wherever KJP is standing. It is smoothed every frame,
      so without this a new floor opens with the camera at the world origin
@@ -777,7 +818,12 @@ function r3dSyncEnts(){
 function r3dCamera(){
   const cam = R3D.cam;
   const aim = P ? P.ang : 0;
-  R3D._ca += angDiff(R3D._ca, aim) * R3D.camLag;
+  /* PROPORTIONAL chase, not a flat lerp: small aim corrections barely move
+     the camera (no jitter amplification), big turns still swing it through.
+     This is the second half of the sensitivity fix — the first is the aim
+     deadzone in ents.js. */
+  const cd = angDiff(R3D._ca, aim);
+  R3D._ca += cd * Math.min(0.14, Math.abs(cd) * 0.30 + 0.02);
   /* CAMERA COLLISION. Parking the camera a fixed distance behind the player
      buries it in the wall behind him every time his back is to one, and the
      frame becomes the flat inside of a box. Cast backwards from KJP and stop

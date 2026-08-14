@@ -246,13 +246,26 @@ function playerUpdate(dt){
   }
   const mlen = Math.hypot(mx, my);
   if (mlen > 1){ mx /= mlen; my /= mlen; }
+  /* ACCELERATION. Movement was binary — full speed the frame a key went down,
+     zero the frame it lifted. Top-down hid it; a third-person camera makes
+     every start and stop read as a snap. ~70ms to full speed, ~50ms to rest:
+     under the threshold where input feels laggy, over the one where motion
+     reads as staccato. The smoothed vector REPLACES the raw one everywhere
+     below, so stride, noise and collision all see the same fluid motion. */
+  const accK = 1 - Math.exp(-dt * ((mx || my) ? 14 : 20));
+  P.mvx = (P.mvx || 0) + (mx - (P.mvx || 0)) * accK;
+  P.mvy = (P.mvy || 0) + (my - (P.mvy || 0)) * accK;
+  mx = Math.abs(P.mvx) < 0.01 ? 0 : P.mvx;
+  my = Math.abs(P.mvy) < 0.01 ? 0 : P.mvy;
   const chokeLock = !!P.choke, dragging = !!P.drag;
   const boots = hasGear(3) ? 1.08 : 1;                    // TACTICAL BOOTS
   const armour = hasGear(2) ? 0.93 : 1;                   // KEVLAR: plates cost you 7%
   let spd = (P.sneak ? 78 : P.runHeld ? 216 : 138) * boots * armour;
   if (dragging) spd = Math.min(spd, 66);
   if (chokeLock) spd = 0;
-  P.moving = mlen > 0.15 ? 1 : 0;
+  /* judged on the SMOOTHED vector, or the deceleration tail would be cut off
+     the frame the key lifted and the easing would never be seen */
+  P.moving = Math.hypot(mx, my) > 0.15 ? 1 : 0;
   if (P.moving && spd > 0){
     P.stride = (P.stride || 0) + spd * dt;
     moveCircle(P, mx * spd * dt, my * spd * dt, 15, "p", { sneak: P.sneak, unlocked: _unlockedDoors() });
@@ -297,7 +310,22 @@ function playerUpdate(dt){
       P.ang = aw !== null || (typeof R3D !== "undefined" && R3D.on) ? a + R3D._ca + Math.PI / 2 : a;
     }
   } else if (!IS_TOUCH || MOUSE.moved > 4){
-    P.ang = aw ? angTo(P.x, P.y, aw.x, aw.y) : angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
+    if (aw){
+      /* THE SENSITIVITY FIX. When the cursor crosses near KJP on screen, the
+         unprojected point sits almost on top of him and a few pixels of mouse
+         movement swing the aim angle wildly — the camera chases the aim, so
+         the whole view whipped. Two guards: inside a dead radius the aim
+         HOLDS its last angle instead of flipping, and outside it the angle
+         is eased hard enough to kill jitter while settling in ~80ms — crisp
+         to shoot with, impossible to whip. */
+      const ad = dist(P.x, P.y, aw.x, aw.y);
+      if (ad > 70){
+        const want = angTo(P.x, P.y, aw.x, aw.y);
+        P.ang += angDiff(P.ang, want) * 0.45;
+      }
+    } else {
+      P.ang = angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
+    }
   }
   if (OPT.aimAssist && (IS_TOUCH || focusOn)){
     let best = null, bd = 0.24;
