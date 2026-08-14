@@ -96,6 +96,7 @@ function r3dBuildLevel(){
   for (const o of [...S.children]){ o.traverse(kill); S.remove(o); }
   R3D.ents.clear(); R3D.lights = []; R3D._plight = null;   // removed with the scene above
   R3D_SHOTS.pool = []; R3D_SHOTS.flash = null; R3D_SHOTS.lastN = 0;
+  R3D_TORCH.clear();
   /* cone meshes were removed from the scene by the loop above — drop the map
      too, or the next floor reuses meshes that are no longer parented */
   R3D_CONES.clear();
@@ -593,6 +594,52 @@ function r3dConeFill(mesh, ox, oy, pts, col, alpha){
   mesh.material.opacity = alpha;
   mesh.visible = true;
 }
+/* FLASHLIGHTS — the beam IS the vision cone. A SpotLight per guard (nearest
+   four only: WebGL pays per light) angled along his facing, plus a faint
+   additive air-beam. The floor slice in R3D_CONES uses the same origin and
+   angle, so what the light shows and what the AI sees can never disagree —
+   the game's best system becoming its best image. */
+const R3D_TORCH = new Map();
+function r3dSyncTorches(){
+  const near = LV.guards
+    .map((e, i) => ({ e, i, d: P ? (e.x - P.x) ** 2 + (e.y - P.y) ** 2 : 0 }))
+    .filter(o => !down(o.e))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 4);
+  const active = new Set();
+  for (const { e, i } of near){
+    if (e.st === "patrol" && themeOf().ambient < 0.78) continue;   // bright floors: torches off on calm patrol
+    active.add(i);
+    let t = R3D_TORCH.get(i);
+    if (!t){
+      const spot = new THREE.SpotLight(0xd8e8ff, 0, e.range, e.fov / 2, 0.45, 1.4);
+      spot.castShadow = false;
+      const beam = new THREE.Mesh(
+        new THREE.ConeGeometry(Math.tan(e.fov / 2) * e.range * 0.5, e.range, 18, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0xbfd8ff, transparent: true, opacity: 0.05,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      beam.renderOrder = 2;
+      R3D.scene.add(spot); R3D.scene.add(spot.target); R3D.scene.add(beam);
+      t = { spot, beam }; R3D_TORCH.set(i, t);
+    }
+    const hot = e.st === "alert" || e.detect >= 1;
+    t.spot.position.set(e.x, 40, e.y);
+    t.spot.target.position.set(e.x + Math.cos(e.ang) * e.range, 12, e.y + Math.sin(e.ang) * e.range);
+    t.spot.target.updateMatrixWorld();
+    t.spot.intensity = hot ? 2.6 : 1.5;
+    t.spot.color.setHex(hot ? 0xffd0c0 : 0xd8e8ff);
+    t.spot.visible = true;
+    /* the cone geometry points -Y by default; lay it flat along the facing */
+    const half = e.range / 2;
+    t.beam.position.set(e.x + Math.cos(e.ang) * half, 34, e.y + Math.sin(e.ang) * half);
+    t.beam.rotation.set(Math.PI / 2, 0, -e.ang - Math.PI / 2, "YXZ");
+    t.beam.material.opacity = hot ? 0.10 : 0.05;
+    t.beam.material.color.setHex(hot ? 0xff8878 : 0xbfd8ff);
+    t.beam.visible = true;
+  }
+  for (const [i, t] of R3D_TORCH) if (!active.has(i)){ t.spot.visible = false; t.beam.visible = false; }
+}
+
 function r3dSyncCones(){
   const seen = new Set();
   /* from crawl height the floor cones fill the whole view — halve them in a
@@ -829,6 +876,7 @@ function r3dFrame(){
   r3dSyncDecals();
   r3dSyncShots();
   r3dSyncCones();
+  r3dSyncTorches();
   r3dPlayerLight();
   r3dCullLights();
   r3dCamera();
