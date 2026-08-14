@@ -286,21 +286,41 @@ function lbFetch(){
   }).catch(() => { lbDown = true; lbNote = "board unreachable"; lbAt = performance.now(); })
     .finally(() => { lbBusy = false; });
 }
-async function submitScore(){
+/* Parameterized: the campaign posts mode "kjp" as it always has; the daily
+   posts its per-day lane, aggravated runs theirs. The server accepts any
+   mode string (verified in api/leaderboard.js source: cleanMode is only
+   slice(0,12), no whitelist) and keeps one PB per wallet PER MODE, so lanes
+   can never contaminate each other. The signed message binds the mode — the
+   server refuses a signature replayed across lanes. */
+async function submitScore(mode, score, level){
+  mode = String(mode || "kjp").slice(0, 12);
   if (!walletAddr){ lbMsg = "connect first"; return; }
-  const s = campaignScore();
+  const s = score !== undefined ? Math.floor(score) : campaignScore();
   if (s <= 0){ lbMsg = "clear an op first"; return; }
   lbMsg = "signing…";
   try{
     const eth = await getEth();
-    const msg = "WICK score\naddress:" + walletAddr + "\nscore:" + s + "\nmode:kjp\nts:" + Date.now();
+    const msg = "WICK score\naddress:" + walletAddr + "\nscore:" + s + "\nmode:" + mode + "\nts:" + Date.now();
     const sig = await eth.request({ method: "personal_sign", params: [msg, walletAddr] });
     lbMsg = "submitting…";
     const r = await fetchT(LB_URL, { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ address: walletAddr, name: playerName, score: s, level: Math.max(1, clearedCount()), mode: "kjp", message: msg, signature: sig }) });
+      body: JSON.stringify({ address: walletAddr, name: playerName, score: s,
+        level: Math.max(1, level !== undefined ? level : clearedCount()), mode, message: msg, signature: sig }) });
     const j = await r.json();
-    if (r.ok && j.ok){ lbMsg = "✓ rank #" + j.rank; lbTop = null; lbAt = 0; SFX.unlock(); }
+    if (r.ok && j.ok){ lbMsg = "✓ rank #" + j.rank; lbTop = null; lbAt = 0; dailyTop = null; SFX.unlock(); }
     else lbMsg = (j && j.error) ? j.error.slice(0, 48) : "submit failed";
   }catch(e){ lbMsg = "sign cancelled"; }
   setTimeout(() => { lbMsg = ""; }, 6000);
+}
+
+/* the day's world board — fetched on demand, cached 2 minutes like lbTop */
+let dailyTop = null, dailyTopAt = 0, dailyTopBusy = false;
+function dailyBoardFetch(){
+  if (dailyTopBusy || (dailyTop && performance.now() - dailyTopAt < 120000)) return;
+  dailyTopBusy = true;
+  fetchT(LB_URL + "?mode=" + dailyMode()).then(r => r.json()).then(j => {
+    dailyTop = (j && j.top) || [];
+    dailyTopAt = performance.now();
+  }).catch(() => { dailyTop = []; dailyTopAt = performance.now(); })
+    .finally(() => { dailyTopBusy = false; });
 }

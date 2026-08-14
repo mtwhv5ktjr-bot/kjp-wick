@@ -235,7 +235,9 @@ function drawTitle(){
   g.font = "700 9px Verdana"; g.fillStyle = "#57717f"; g.textAlign = "center";
   /* short enough to stay on canvas when centred — the merged version ran off
      the left edge to x=-41 */
-  g.fillText(dailyLabel() + " · resets in " + fmtLeft(dailyLeft()), bx + bw / 2, r4 + bh + 13);
+  const _st = streakCalc();
+  g.fillText(dailyLabel() + " · resets in " + fmtLeft(dailyLeft()) + (_st.days > 0 ? " · 🔥" + _st.days : ""),
+             bx + bw / 2, r4 + bh + 13);
   g.textAlign = "left";
   /* DIFFICULTY — a first-class fact on the front page, not a buried setting.
      It used to be drawn at row4 + 8, which is exactly where the DAILY CONTRACT
@@ -637,7 +639,33 @@ function drawDebrief(dt){
     else btn(90, H - 120, 280, 52, "▶ THE VERDICT", () => startOutro());
     btn(390, H - 120, 170, 52, "↻ REPLAY", () => { if (DB.daily) startDaily(); else startBrief(DB.n); });
     btn(580, H - 120, 170, 52, "☰ MENU", () => { STATE = "select"; });
-    if (walletAddr) btn(770, H - 120, 260, 52, lbMsg || "📡 SUBMIT CAMPAIGN", () => submitScore(), { fs: 12 });
+    if (DB.daily){
+      /* THE DAILY IS A RACE, and until now you ran it blind. Today's world
+         board — everyone on the same seed — drawn right at the finish line,
+         with your place in it and one button to make it official. This lane
+         dies at UTC midnight, which is the whole point. */
+      dailyBoardFetch();
+      const bx2 = 770, by2 = H - 320;
+      g.font = "900 12px Arial Black"; g.fillStyle = "#7cf9a5";
+      g.fillText("TODAY'S WORLD BOARD", bx2, by2);
+      g.font = "700 11px Verdana";
+      if (!Array.isArray(dailyTop)) { g.fillStyle = "#57717f"; g.fillText("…dialing", bx2, by2 + 20); }
+      else if (!dailyTop.length){ g.fillStyle = "#7c8ba3"; g.fillText("nobody has posted today — be first", bx2, by2 + 20); }
+      else dailyTop.slice(0, 5).forEach((e2, i) => {
+        const nm = (e2.name && e2.name.trim()) ? e2.name : (e2.a || "").slice(0, 6) + "…";
+        g.fillStyle = i === 0 ? "#ffd27c" : "#9db4cc";
+        g.fillText((i + 1) + ". " + nm, bx2, by2 + 20 + i * 17);
+        g.textAlign = "right"; g.fillText((e2.score || 0).toLocaleString(), bx2 + 300, by2 + 20 + i * 17); g.textAlign = "left";
+      });
+      const st = streakCalc();
+      if (st.days > 0){
+        g.font = "900 11px Arial Black"; g.fillStyle = "#ff9d5b";
+        g.fillText("🔥 " + st.days + "-DAY STREAK" + (st.shields ? "  ·  🛡 ×" + st.shields : ""), bx2, by2 + 116);
+      }
+      if (walletAddr) btn(770, H - 120, 260, 52, lbMsg || "📡 POST TO TODAY'S BOARD", () => submitScore(dailyMode(), dailyBest(), 1), { fs: 11 });
+      else btn(770, H - 120, 260, 52, "🔫 GET A GUN TO POST ↗", () => openShop("https://mint.wick.pics"), { fs: 11 });
+    }
+    else if (walletAddr) btn(770, H - 120, 260, 52, lbMsg || "📡 SUBMIT CAMPAIGN", () => submitScore(), { fs: 12 });
     else {
       /* THE CONVERSION MOMENT. The old behaviour at the peak of a player's
          pride was silence — or worse, "holders only". Now the game does the

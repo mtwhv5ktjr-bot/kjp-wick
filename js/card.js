@@ -80,6 +80,27 @@ function drawScoreCard(r, n, mode){
   g.fillText(gearN ? gearN + "/8 GEAR CARRIED" : "NO GEAR", W - 300, 488);
   g.textAlign = "left";
 
+  /* STREAK STRIP — the shareable brag. Fourteen boxes, one per day, medal
+     colours for played days; the flame and count beside them. On a card that
+     gets posted, a 12-day streak is social proof no screenshot of a score is. */
+  try {
+    const st = streakCalc();
+    if (st.days > 0){
+      const px2 = 520, py2 = H - 64;
+      g.font = "900 14px Arial Black"; g.fillStyle = "#ff9d5b";
+      g.fillText("🔥 " + st.days + "-DAY STREAK", px2, py2 - 10);
+      const played = PROG.daily || {};
+      for (let d = 13; d >= 0; d--){
+        const t = new Date(Date.now() - d * 86400000);
+        const k = "" + t.getUTCFullYear() + String(t.getUTCMonth() + 1).padStart(2, "0") + String(t.getUTCDate()).padStart(2, "0");
+        const e2 = played[k];
+        const x2 = px2 + (13 - d) * 20;
+        g.fillStyle = e2 ? (MEDALS.find(m2 => m2.k === e2.medal) || { col: "#3f7a55" }).col : "rgba(60,72,84,0.5)";
+        g.fillRect(x2, py2, 15, 15);
+      }
+    }
+  } catch(e){}
+
   g.font = "900 15px Arial Black"; g.fillStyle = "#ff9d5b";
   g.fillText("kjp-game.wick.pics", 60, H - 44);
   g.font = "700 11px Verdana"; g.fillStyle = "#3d4854";

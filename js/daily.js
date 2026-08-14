@@ -58,6 +58,34 @@ function dailyBest(key){
   const d = (PROG.daily || {})[key || DAILY.key];
   return d ? d.score : 0;
 }
+
+/* THE WORLD BOARD LANE. The server clamps mode to 12 chars, which is why
+   "daily-YYYYMMDD" (14) was impossible — it would have collapsed every day of
+   a month onto one immortal board. Epoch-day in base36 is 6 chars ("kd-fye")
+   and stays under the clamp until ~2109. Same trick gives aggravated runs
+   their own lane ("kdx-") so clean and mutated scores never share a board. */
+function dailyMode(){ return "kd-" + (Math.floor(Date.now() / 86400000)).toString(36); }
+function dailyModeAggravated(){ return "kdx-" + (Math.floor(Date.now() / 86400000)).toString(36); }
+
+/* WORDLE'S ENGINE: the streak. Walk back day by day through PROG.daily;
+   a missed day eats a SAFEHOUSE DAY shield if one is banked, otherwise the
+   streak ends. Today not yet played does not break it — the streak is
+   "alive", exactly like Wordle before the day's puzzle.
+   Pure read — nothing is consumed by LOOKING at your streak. */
+function streakCalc(){
+  const played = PROG.daily || {};
+  const day = d => { const t = new Date(Date.now() - d * 86400000);
+    return "" + t.getUTCFullYear() + String(t.getUTCMonth() + 1).padStart(2, "0") + String(t.getUTCDate()).padStart(2, "0"); };
+  let days = 0, shieldsUsed = 0, avail = PROG.shields || 0;
+  let i = played[day(0)] ? 0 : 1;          // today unplayed → start counting from yesterday
+  for (; i < 3660; i++){
+    if (played[day(i)]){ days++; continue; }
+    if (i === 1 && days === 0) break;      // yesterday unplayed and nothing counted — no streak
+    if (avail > 0){ avail--; shieldsUsed++; continue; }
+    break;
+  }
+  return { days, shieldsUsed, shields: PROG.shields || 0 };
+}
 function dailyLabel(){
   const lv = LEVELS[DAILY.lv], dn = (DIFFS[DAILY.diff] || {}).name || DAILY.diff;
   const gb = (GEARDEFS[DAILY.ban] || {}).name || "—";
@@ -97,6 +125,12 @@ function dailyFinish(r){
   const cur = PROG.daily[DAILY.key];
   if (!cur || r.score > cur.score)
     PROG.daily[DAILY.key] = { score: r.score, time: r.time, rank: r.rank, medal: r.medal, ts: Date.now() };
+  /* SAFEHOUSE DAYS: one banked per full week of streak, held to a cap of 3 —
+     a shield economy loose enough to forgive a weekend, tight enough that the
+     streak still means something. Recomputed only when a day is actually
+     banked, never on read. */
+  const st = streakCalc();
+  PROG.shields = Math.max(PROG.shields || 0, Math.min(3, Math.floor(st.days / 7)));
   saveProg();
   dailyEnd();
 }
