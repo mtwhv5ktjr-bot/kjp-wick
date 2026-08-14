@@ -313,6 +313,34 @@ async function submitScore(mode, score, level){
   setTimeout(() => { lbMsg = ""; }, 6000);
 }
 
+/* ---- honest-store data: fiat and live supply ----------------------------
+   Both cached hard and both COSMETIC — display only, never in a transaction
+   path. A wrong fiat estimate mislabels a button; wiring it into the tx
+   would misprice a purchase. */
+window._plsUsd = 0; let _plsUsdAt = 0, _plsUsdBusy = false;
+function fetchPlsUsd(){
+  if (_plsUsdBusy || (window._plsUsd > 0 && performance.now() - _plsUsdAt < 300000)) return;
+  _plsUsdBusy = true;
+  /* DEXScreener on the WPLS pairs — CORS-open, same pattern rh-wallet-viewer
+     and the tweeter already rely on */
+  fetchT("https://api.dexscreener.com/latest/dex/tokens/0xA1077a294dDE1B09bB078844df40758a5D0f9a27")
+    .then(r => r.json()).then(j => {
+      const p = j && j.pairs && j.pairs.find(q => q.priceUsd > 0);
+      if (p){ window._plsUsd = parseFloat(p.priceUsd) || 0; _plsUsdAt = performance.now(); }
+    }).catch(() => {}).finally(() => { _plsUsdBusy = false; });
+}
+window._gearMinted = -1; let _gmAt = 0, _gmBusy = false;
+function fetchGearMinted(){
+  if (_gmBusy || (window._gearMinted >= 0 && performance.now() - _gmAt < 120000)) return;
+  _gmBusy = true;
+  fetchT(PULSE_RPC, { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call",
+      params: [{ to: GEAR_ADDR, data: "0x18160ddd" }, "latest"] }) })   // totalSupply()
+    .then(r => r.json()).then(j => {
+      if (j && j.result){ window._gearMinted = parseInt(j.result, 16); _gmAt = performance.now(); }
+    }).catch(() => {}).finally(() => { _gmBusy = false; });
+}
+
 /* the day's world board — fetched on demand, cached 2 minutes like lbTop */
 let dailyTop = null, dailyTopAt = 0, dailyTopBusy = false;
 function dailyBoardFetch(){

@@ -133,6 +133,13 @@ function drawReadyRoom(){
       /* owned: ARMED or STOWED, and the whole box flips it */
       g.fillStyle = has ? "#7cf9a5" : "#6a7a88";
       g.fillText(has ? "ARMED" : "STOWED", bx + bw - 48, by + 15);
+      /* the engraving: what this piece has actually been through */
+      const rec = (PROG.gearRec || {})[t];
+      if (rec && rec.ops > 0){
+        g.font = "700 8px Verdana"; g.fillStyle = has ? "#8a6d2f" : "#4e5c68";
+        g.fillText(rec.ops + " ops" + (rec.ghosts ? " · " + rec.ghosts + " ghost" : ""), bx + bw - 48, by + 25);
+        g.font = "900 8px Arial Black";
+      }
       if (hot){
         g.fillStyle = "#ffd27c"; g.font = "900 8px Arial Black";
         g.fillText(has ? "▸ CLICK TO STOW" : "▸ CLICK TO DEPLOY", bx + bw - 108, by + bh - 8);
@@ -221,7 +228,20 @@ function drawReadyRoom(){
   /* one line of plain economics under the buy button — and the wallet line
      lives up by the title, where it cannot collide with it */
   g.font = "700 9px Verdana"; g.fillStyle = buyHot ? "#ffd27c" : "#57717f";
-  g.fillText("1,000,000 PLS · 50% burns KJP · 50% burns WICK", 216, H - 70);
+  /* THE HONEST STORE. The 1M-PLS ask was blind: no dollar figure, no live
+     count, and nowhere did it say the pull is random or that duplicates
+     don't stack — callout-thread bait for a crypto audience that has seen
+     every trick. Transparent odds are the strongest buy trigger this
+     economy has AND the cheapest insurance. */
+  g.fillText("1,000,000 PLS" + (window._plsUsd > 0 ? " (≈ $" + (1e6 * window._plsUsd).toFixed(0) + ")" : "")
+    + " · 50% burns KJP · 50% burns WICK", 216, H - 70);
+  g.font = "700 8px Verdana"; g.fillStyle = "#57717f";
+  /* under the buy button, in the clear strip above the canvas edge — the
+     first placement sat inside the always-carried gun boxes (audit caught
+     two TEXT/TEXT pairs at 8d) */
+  g.fillText((window._gearMinted >= 0 ? (100 - window._gearMinted) + " of 100 left · " : "")
+    + "random piece from what's left · duplicates don't stack — sell dupes on the market", 216, H - 8);
+  fetchPlsUsd(); fetchGearMinted();
   drawWalletPanel();
   dispatchClicks();
 }

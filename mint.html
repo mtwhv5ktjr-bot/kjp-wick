@@ -130,6 +130,10 @@
     <div class="row">
       <input type="number" id="qty" value="1" min="1" max="5">
       <button id="mintBtn" class="gold" disabled>MINT</button>
+      <div style="font-size:11px;color:#7c8ba3;margin-top:8px;line-height:1.5">
+        Your piece is <b>random from what's left</b>. Duplicates <b>don't stack</b> in-game —
+        sell dupes on the <a href="https://mint.wick.pics" style="color:#7cf9a5">market</a>.
+      </div>
       <button id="connectBtn">CONNECT</button>
     </div>
   </div>
@@ -269,6 +273,14 @@ async function refresh(){
     priceWei = BigInt(pr);
     $("supply").textContent = supply + " / 100";
     $("price").textContent = (Number(priceWei / 10n ** 18n)).toLocaleString() + " PLS";
+    /* fiat estimate — display only, never in the tx path. DEXScreener is
+       CORS-open; a failed fetch just leaves the PLS figure alone. */
+    fetch("https://api.dexscreener.com/latest/dex/tokens/0xA1077a294dDE1B09bB078844df40758a5D0f9a27")
+      .then(r => r.json()).then(j => {
+        const p = j && j.pairs && j.pairs.find(q => q.priceUsd > 0);
+        if (p) $("price").textContent = (Number(priceWei / 10n ** 18n)).toLocaleString()
+          + " PLS  (≈ $" + (Number(priceWei / 10n ** 18n) * parseFloat(p.priceUsd)).toFixed(0) + ")";
+      }).catch(() => {});
     const isOpen = /1$/.test(open);
     if (!isOpen) say("Mint is not open yet.", "");
     else if (supply >= 100) say("SOLD OUT — 100/100. Secondary only.", "");

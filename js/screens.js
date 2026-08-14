@@ -583,6 +583,18 @@ function finishLevel(){
     old.intelMax = r.intelMax;
     if (r.intel > (old.intel || 0)) old.intel = r.intel;
   }
+  /* SERVICE RECORD — engraved history per gear type. 22 interchangeable
+     suppressors cannot price-disperse; "this one ran 212 ops, 41 of them
+     ghost" is the StatTrak mechanism that makes one worth more than
+     another. Client-side phase: per-TYPE, counted on COMPLETED ops only so
+     restarts cannot farm it. Provenance, never gameplay. */
+  const gr = PROG.gearRec = PROG.gearRec || {};
+  for (const t of (window.ownedGearTypes || [])){
+    if (gearStowed(t) || (typeof gearBanned === "function" && gearBanned(t))) continue;
+    const rec = gr[t] = gr[t] || { ops: 0, ghosts: 0 };
+    rec.ops++;
+    if (r.ghost) rec.ghosts++;
+  }
   /* lifetime career tallies for the DOSSIER */
   const c = PROG.career = PROG.career || {};
   c.runs = (c.runs || 0) + 1; c.kos = (c.kos || 0) + r.kos; c.kills = (c.kills || 0) + r.kills;
