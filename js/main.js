@@ -64,6 +64,7 @@ function gameUpdate(dt){
      instead of fighting over who owns time. */
   const scale = focusScale(dt) * tdScale();
   entsUpdate(dt * scale);
+  subtUpdate(dt);          // subtitles run on real time — radio doesn't slow for FOCUS
   tutUpdate(dt);
 }
 function drawIntroCard(){

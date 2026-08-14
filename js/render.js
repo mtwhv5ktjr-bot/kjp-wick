@@ -1544,6 +1544,21 @@ function drawHUD(){
     g.strokeStyle = "rgba(255,120,130,0.4)"; g.lineWidth = 1; heartPath(x, y, 10); g.stroke();
   }
 
+  /* SUBTITLE TICKER — what the radio just said, in words. Centre-bottom in
+     the safe band between the weapon panel (left) and touch cluster (right).
+     Typewriter reveal at codec cadence; the Director prints red. */
+  if (SUBT){
+    const shown = SUBT.text.slice(0, Math.ceil((3.2 - SUBT.t) * 46));
+    g.font = "700 12px Verdana"; g.textAlign = "center";
+    const a2 = Math.min(1, SUBT.t / 0.4);
+    g.fillStyle = "rgba(4,9,14," + (0.8 * a2) + ")";
+    const tw = g.measureText(SUBT.text).width + 26;
+    g.fillRect(W / 2 - tw / 2, H - 62, tw, 20);
+    g.fillStyle = SUBT.dir ? "rgba(255,107,107," + a2 + ")" : "rgba(159,215,176," + a2 + ")";
+    g.fillText("📻 " + shown, W / 2, H - 48);
+    g.textAlign = "left";
+  }
+
   /* RETICLE — only in 3D, and only where the shot actually lands. Turns red
      when a body is in the line, which is the one piece of information the
      top-down view gave for free and perspective takes away. */

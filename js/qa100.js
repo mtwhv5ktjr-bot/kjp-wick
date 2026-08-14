@@ -686,8 +686,17 @@ function runQA100(){
   qok("every touch button declares a real action", () =>
     BTN_DEFS.every(b => b.hold || b.toggle || b.key)
     || BTN_DEFS.filter(b => !b.hold && !b.toggle && !b.key).map(b => b.k).join(",") + " do nothing");
-  qok("every touch button is reachable by the hit test", () =>
-    BTN_DEFS.every(b => touchBtnAt(b.x, b.y) === b.k) || "hit test mismatch");
+  /* the contract CHANGED with the context filter: a VISIBLE button must be
+     reachable, and a hidden one must refuse the same tap — both directions
+     are the invariant now */
+  qok("visible touch buttons are reachable, hidden ones refuse", () => {
+    for (const b of BTN_DEFS){
+      const hit = touchBtnAt(b.x, b.y);
+      if (btnVisible(b.k) && hit !== b.k) return b.k + " visible but unreachable";
+      if (!btnVisible(b.k) && hit === b.k) return b.k + " hidden but still tappable";
+    }
+    return true;
+  });
   qok("touch buttons cover every sandbox verb", () => {
     const keys = BTN_DEFS.map(b => b.key).filter(Boolean);
     for (const need of ["KeyE", "KeyF", "KeyQ", "KeyG", "KeyV"])

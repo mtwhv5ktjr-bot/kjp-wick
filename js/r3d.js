@@ -270,7 +270,7 @@ function r3dMakeActor(kind){
 
   const head = new THREE.Mesh(new THREE.SphereGeometry(7.4, 16, 12),
     new THREE.MeshStandardMaterial({ color: kind === "player" ? skin : 0xc9a88a, roughness: 0.7 }));
-  head.position.y = 44; head.castShadow = true; grp.add(head);
+  head.position.y = 44; head.castShadow = true; head.name = "head"; grp.add(head);
 
   if (kind === "player"){
     /* the locked face: hair curtains either side, shades across the front.
@@ -653,9 +653,14 @@ function r3dSyncEnts(){
       a.userData.gunCls = gunCls;
     }
     a.position.set(x, 0, y);
+    /* -ang - π/2, NOT -ang + π/2. The head-tracking calibration probe caught
+       that every actor rendered 180° backward: at ang=0 the face pointed
+       WEST, which is why KJP's shades were always visible from a camera
+       BEHIND him. Symmetric bodies hid it for days; a head that must be
+       right about direction could not. */
     if (ent && !down) r3dAnimate(a, ent, !!moving, !!aiming && !!gunCls, ent.isPlayer ? (P.sneak ? (R3D._inVent ? 2 : 1) : 0) : 0);
     /* game angle 0 = +x; the model faces -Z. */
-    a.rotation.y = -ang + Math.PI / 2;
+    a.rotation.y = -ang - Math.PI / 2;
     a.visible = true;
     /* downed bodies lie on the floor — the clearest possible read that a guard
        is out, which matters because dragging and hiding them is a mechanic */
@@ -678,6 +683,28 @@ function r3dSyncEnts(){
   for (const e of LV.guards) put("g" + LV.guards.indexOf(e), e.kind, e.x, e.y, e.ang, down(e), a => {
     const pulse = a.getObjectByName("pulse");
     if (pulse) pulse.intensity = down(e) ? 0 : 1.0 + Math.sin(performance.now() / 260) * 0.5;
+    /* HEAD TRACKING — the head turns toward what the AI is THINKING about,
+       which broadcasts the sophisticated sim for free: a searcher's head
+       sweeps his slice, an alert guard locks onto you, the Director tracks
+       LV.lastKnown (never your true position — he is relentless, not
+       psychic). Clamped to a human ±63°, eased, and slack in patrol. */
+    const head = a.getObjectByName("head");
+    if (head && !down(e)){
+      let tx = null, ty = null;
+      if (e.st === "alert" && !P.dead){ tx = P.x; ty = P.y; }
+      else if ((e.st === "susp" || e.st === "search") && e.target){ tx = e.target.x; ty = e.target.y; }
+      else if (e.st === "hunt" && LV.lastKnown){ tx = LV.lastKnown.x; ty = LV.lastKnown.y; }
+      else if (e.st === "heldup" && !P.dead){ tx = P.x; ty = P.y; }
+      let want = 0;
+      if (tx !== null){
+        /* body faces e.ang; the model's forward is -Z after rotation.y =
+           -ang+π/2, so a world-angle offset δ becomes local yaw -δ. The sign
+           was verified empirically with getWorldDirection — angle math here
+           has bitten twice before. */
+        want = Math.max(-1.1, Math.min(1.1, -angDiff(e.ang, angTo(e.x, e.y, tx, ty))));
+      }
+      head.rotation.y += (want - head.rotation.y) * 0.12;
+    }
     /* held up = hands straight overhead — the universal silhouette, readable
        across the whole room, which is what makes the verb feel earned */
     if (e.st === "heldup"){

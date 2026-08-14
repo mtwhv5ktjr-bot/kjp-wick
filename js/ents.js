@@ -132,6 +132,7 @@ function seesPlayer(e, range, fov, ignoreLight){
 function goCombat(fromX, fromY){
   if (LV.alert < 2){
     LV.stats.combats++;
+    const _cg = LV.guards.find(g2 => !down(g2)); if (_cg) guardBark(_cg, "combat", 3);
     musicWant("combat");
     /* first combat brings friends through the doors (sim-time queue — no
        wall-clock setTimeout, so headless step() and pause behave) */
@@ -144,8 +145,35 @@ function goCombat(fromX, fromY){
 }
 /* a body got called in / an alarm got pulled: this is the big one.
    Site goes weapons-free and a QRF wave storms the entrances. */
+/* ---- GUARD BARKS: the sim narrating itself -------------------------------
+   Every AI state change already printed a silent toast; now the man SAYS it —
+   vox babble on the radio chain with a one-line subtitle. Variants keyed by
+   the guard's own index so the same man favours the same phrases. Priority:
+   combat calls step on search mutters, never the reverse. */
+let SUBT = null;   // { text, t }
+const BARKS = {
+  spotted:  ["CONTACT! Intruder on the floor!", "THERE — freeze! FREEZE!", "Eyes on! He's right THERE!"],
+  combat:   ["ALL UNITS — weapons free!", "Central, we are ENGAGING!", "Take him DOWN — now, now, now!"],
+  body:     ["MAN DOWN — man down, calling it in!", "Officer down! Get QRF on my mark!", "He's not moving — LOCK IT DOWN!"],
+  lost:     ["Lost him — fan out, he's CLOSE", "Where — WHERE? Spread out!", "He was just here… check the corners"],
+  giveup:   ["…must've been nothing", "Probably rats. Again.", "Going back to my post…"],
+  heldup:   ["OK— OK. Easy. EASY.", "Don't. Please. I have a boat payment.", "You're the lawyer, right? Oh no."],
+  director: ["I know you're on this floor, counselor.", "You can't cuff EVERYONE, Pierre.", "The file stays. YOU stay."]
+};
+function guardBark(e, kind, prio){
+  const lines = BARKS[e.kind === "director" && BARKS.director && kind === "spotted" ? "director" : kind];
+  if (!lines) return;
+  const i = LV.guards.indexOf(e);
+  const text = lines[((i < 0 ? 0 : i) + (kind === "giveup" ? 1 : 0)) % lines.length];
+  const seed = e.kind === "director" ? 3 : 20 + i * 7;   // Director sits low and slow
+  if (typeof vox === "function" && vox(text, e.x, e.y, seed, prio || 1))
+    SUBT = { text, t: 3.2, dir: e.kind === "director" };
+}
+function subtUpdate(dt){ if (SUBT){ SUBT.t -= dt; if (SUBT.t <= 0) SUBT = null; } }
+
 function bodyAlarm(x, y, label){
   LV.stats.alarms++;
+  const _rep = LV.guards.find(g2 => !down(g2)); if (_rep) guardBark(_rep, "body", 3);
   heatAdd(2, "they called it in");
   toast(label || "🚨 BODY REPORTED — QRF INBOUND", "#ff5b5b");
   STING.alarm();
@@ -486,7 +514,7 @@ function _interactions(dt){
         if (PRESS.has("KeyE") || (TOUCH.act && !P.actLatch)){
           e.st = "heldup"; e.heldBreak = 0; e.detect = 0; e.radioT = -1; e.path = null;
           P.actLatch = true;
-          SFX.susp(); toast("hands up — he's yours while the gun is on him", "#8fc7ff");
+          SFX.susp(); toast("hands up — he's yours while the gun is on him", "#8fc7ff"); guardBark(e, "heldup", 2);
         }
         return;
       }
@@ -726,7 +754,7 @@ function guardUpdate(e, dt){
 
   /* --- state transitions --- */
   if (e.detect >= 1 && e.st !== "alert"){
-    e.st = "alert"; e.pop = "!"; e.popT = 1; STING.spotted();
+    e.st = "alert"; e.pop = "!"; e.popT = 1; STING.spotted(); guardBark(e, "spotted", 3);
     LV.stats.spotted = (LV.stats.spotted || 0) + 1;        // GHOST rank dies here
     e.radioT = e.radioBase * (skinDef().radioMul || 1) * diff().radio;
     e.bodyRadio = null;                                    // live hostile outranks a body report
@@ -795,7 +823,7 @@ function guardUpdate(e, dt){
       if (tgt){
         e.repathT -= dt;
         if (e.repathT <= 0){ nearestPathTo(e, Math.floor(tgt.x / T), Math.floor(tgt.y / T), "g"); e.repathT = 0.7; }
-        if (walkPath(e, e.spd * 1.45, dt)){ e.st = "search"; e.susT = 9; }
+        if (walkPath(e, e.spd * 1.45, dt)){ e.st = "search"; e.susT = 9; guardBark(e, "lost", 2); }
       } else { e.st = "search"; e.susT = 9; }
     }
   }
@@ -806,7 +834,7 @@ function guardUpdate(e, dt){
       if (e.repathT <= 0){ nearestPathTo(e, Math.floor(e.target.x / T), Math.floor(e.target.y / T), "g"); e.repathT = 0.8; }
       if (walkPath(e, e.spd * 1.15, dt)){ e.target = null; e.scanA = e.ang; }
     } else e.ang = e.scanA + Math.sin(LV.time * 2.2) * 1.1;
-    if (e.susT <= 0){ e.st = isHunter(e) ? "hunt" : "return"; e.path = null; }
+    if (e.susT <= 0){ if (!isHunter(e)) guardBark(e, "giveup", 1); e.st = isHunter(e) ? "hunt" : "return"; e.path = null; }
   }
   else if (e.st === "search"){
     e.susT -= dt;

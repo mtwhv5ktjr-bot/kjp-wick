@@ -133,3 +133,83 @@ const STING = {
   fail(){ const t = ac().currentTime;
     [392, 330, 262, 196].forEach((f, i) => tone(f, 0.5, "sawtooth", 0.13, -20, t + i * 0.16)); }
 };
+
+/* ---- GUARD VOX: walkie-talkie babble ----------------------------------
+   Silent enemies are the loudest "browser game" tell. This is not speech —
+   it is per-syllable sawtooth babble pushed through a radio chain (tight
+   bandpass, soft clip, squelch clicks), which is exactly how MGS1 sold
+   sentient guards on a PS1: the TEXTURE of a voice, with subtitles doing
+   the words. Every guard gets a pitch from his own seed so the same man
+   sounds like the same man; the Director sits lower and slower than anyone.
+
+   ONE active bark, priority-gated. Radio chatter that overlaps reads as a
+   bug; a net where one voice waits for another reads as discipline. */
+let VOX = { chain: null, busyUntil: 0, lastPrio: 0 };
+function _voxChain(){
+  if (VOX.chain) return VOX.chain;
+  const c = ac();
+  const inG = c.createGain(); inG.gain.value = 1;
+  const bp1 = c.createBiquadFilter(); bp1.type = "highpass"; bp1.frequency.value = 350;
+  const bp2 = c.createBiquadFilter(); bp2.type = "lowpass"; bp2.frequency.value = 2700;
+  const shaper = c.createWaveShaper();
+  const curve = new Float32Array(256);
+  for (let i = 0; i < 256; i++){ const x = i / 128 - 1; curve[i] = Math.tanh(2.6 * x); }
+  shaper.curve = curve;
+  const outG = c.createGain(); outG.gain.value = 0.9;
+  inG.connect(bp1); bp1.connect(bp2); bp2.connect(shaper); shaper.connect(outG);
+  outG.connect(BUS.sfx || c.destination);
+  VOX.chain = { inG, outG };
+  return VOX.chain;
+}
+function _squelch(t){
+  const c = ac(), ch = _voxChain();
+  const n = c.createBufferSource(), len = 0.012 * c.sampleRate | 0;
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.5;
+  n.buffer = buf;
+  const g2 = c.createGain(); g2.gain.value = 0.5;
+  n.connect(g2); g2.connect(ch.inG);
+  n.start(t);
+}
+/* text, world position (for distance), seed (per-guard identity), prio 1-3 */
+function vox(text, x, y, seed, prio){
+  try {
+    const c = ac(), now = c.currentTime;
+    if (now < VOX.busyUntil && (prio || 1) <= VOX.lastPrio) return false;
+    const ch = _voxChain();
+    /* distance attenuation — a bark across the floor is a whisper */
+    const d = (typeof P !== "undefined" && P) ? dist(P.x, P.y, x, y) : 0;
+    const att = Math.max(0.12, Math.min(1, 1 - d / 950));
+    /* syllables from the text itself: vowel groups, clamped 3..9 */
+    const syl = Math.max(3, Math.min(9, (String(text).match(/[aeiouy]+/gi) || []).length));
+    const base = 85 + ((seed || 0) * 2654435761 % 1000) / 1000 * 55;
+    const rnd = (i, k) => (((seed || 1) * 37 + i * 101 + k * 13) * 2654435761 % 1000) / 1000;
+    _squelch(now);
+    let t = now + 0.03;
+    for (let i = 0; i < syl; i++){
+      const o = c.createOscillator(); o.type = "sawtooth";
+      o.frequency.setValueAtTime(base * (0.9 + rnd(i, 1) * 0.35), t);
+      o.frequency.exponentialRampToValueAtTime(base * (0.8 + rnd(i, 2) * 0.3), t + 0.08);
+      /* two vowel formants, randomized per syllable — dark and garbled on
+         purpose: the closer procedural babble gets to real phonemes, the
+         more it reads as clown noise */
+      const f1 = c.createBiquadFilter(); f1.type = "bandpass";
+      f1.frequency.value = 300 + rnd(i, 3) * 500; f1.Q.value = 5;
+      const f2 = c.createBiquadFilter(); f2.type = "bandpass";
+      f2.frequency.value = 900 + rnd(i, 4) * 1300; f2.Q.value = 7;
+      const g2 = c.createGain();
+      const dur = 0.055 + rnd(i, 5) * 0.055;
+      g2.gain.setValueAtTime(0, t);
+      g2.gain.linearRampToValueAtTime(0.5 * att, t + 0.012);
+      g2.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(f1); o.connect(f2); f1.connect(g2); f2.connect(g2); g2.connect(ch.inG);
+      o.start(t); o.stop(t + dur + 0.02);
+      t += dur + 0.015 + rnd(i, 6) * 0.03;                 // inter-syllable gap
+    }
+    _squelch(t + 0.01);
+    VOX.busyUntil = t + 0.12;
+    VOX.lastPrio = prio || 1;
+    return true;
+  } catch(e){ return false; }
+}
