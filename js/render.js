@@ -446,7 +446,7 @@ function drawKJP(x, y, ang, opts){
      tiny on purpose: at this scale anything above ~1.5% reads as a bounce
      rather than as mass. Menus and portraits never bob. */
   const bob = (o.moving && !o.menu)
-    ? 1 + Math.sin(((P && P.stride) || 0) / _STEP_CYC * TAU * 2) * 0.013 : 1;
+    ? 1 + Math.sin(((P && P.stride) || 0) / _STEP_CYC * TAU * 2) * (OPT.reduceMotion ? 0 : 0.013) : 1;   // v2.0.87
   const scale = 1.45 * (sneak ? 0.94 : 1) * bob; // he's the main character — let him read like one
   const w0 = P && !o.menu ? curW() : WEAPONS.tranq;
   const sprite = artFor([
@@ -826,10 +826,29 @@ function drawConeTint(e, pts, range, fov, tint, edge, state){
   g.beginPath(); g.arc(e.x, e.y, bandR, e.ang - fov / 2, e.ang + fov / 2); g.stroke();
   g.restore();
 }
+/* v2.0.83 HIGH CONTRAST bumps every cone's alpha, and v2.0.84 COLOURBLIND
+   swaps the three state hues for a palette that stays distinct under the
+   common deficiencies — the state read (calm/susp/alert) is the single most
+   important colour signal in the game, so it must survive colour-blindness. */
+function _cbTriplet(state){
+  /* returns [r,g,b] for calm/susp/alert under the chosen mode. Defaults keep
+     the original blue/amber/red. Deutan/protan avoid red-green confusion by
+     using blue↔yellow↔white-hot; tritan avoids blue-yellow. */
+  const P = {
+    off:  { calm: [170,230,210], susp: [255,200,90], alert: [255,90,90] },
+    deut: { calm: [90,160,255],  susp: [255,255,255], alert: [255,120,0] },   // blue / white / orange
+    prot: { calm: [90,160,255],  susp: [255,255,255], alert: [255,120,0] },
+    trit: { calm: [0,220,180],   susp: [255,120,200], alert: [220,40,40] },    // teal / pink / red
+  };
+  return (P[OPT.cbMode] || P.off)[state];
+}
 function coneColors(e){
-  if (e.st === "alert" || e.detect >= 1) return [["rgba(255,70,70,0.20)", "rgba(255,60,60,0.10)"], "rgba(255,90,90,0.34)"];
-  if (e.st === "susp" || e.detect > 0.45) return [["rgba(255,190,70,0.17)", "rgba(255,180,60,0.08)"], "rgba(255,200,90,0.3)"];
-  return [["rgba(190,235,255,0.13)", "rgba(150,220,190,0.05)"], "rgba(170,230,210,0.16)"];
+  const hc = OPT.highContrast ? 1.7 : 1;
+  const st = (e.st === "alert" || e.detect >= 1) ? "alert" : (e.st === "susp" || e.detect > 0.45) ? "susp" : "calm";
+  const [r, gg, b] = _cbTriplet(st);
+  const fill = a => "rgba(" + r + "," + gg + "," + b + "," + Math.min(0.5, a * hc).toFixed(3) + ")";
+  const base = st === "alert" ? 0.20 : st === "susp" ? 0.17 : 0.13;
+  return [[fill(base), fill(base * 0.5)], fill(base * 1.7)];
 }
 
 /* ================= lightmap ================= */
@@ -1567,13 +1586,16 @@ function drawHUD(){
      Typewriter reveal at codec cadence; the Director prints red. */
   if (SUBT){
     const shown = SUBT.text.slice(0, Math.ceil((3.2 - SUBT.t) * 46));
-    g.font = "700 12px Verdana"; g.textAlign = "center";
+    /* v2.0.89 — LARGE TEXT actually scales subtitles now (it only ever
+       touched the tutorial, despite the option saying "and subtitles") */
+    const fs = OPT.bigText ? 16 : 12, bh = OPT.bigText ? 26 : 20;
+    g.font = "700 " + fs + "px Verdana"; g.textAlign = "center";
     const a2 = Math.min(1, SUBT.t / 0.4);
     g.fillStyle = "rgba(4,9,14," + (0.8 * a2) + ")";
     const tw = g.measureText(SUBT.text).width + 26;
-    g.fillRect(W / 2 - tw / 2, H - 62, tw, 20);
+    g.fillRect(W / 2 - tw / 2, H - 42 - bh, tw, bh);
     g.fillStyle = SUBT.dir ? "rgba(255,107,107," + a2 + ")" : "rgba(159,215,176," + a2 + ")";
-    g.fillText("📻 " + shown, W / 2, H - 48);
+    g.fillText("📻 " + shown, W / 2, H - 46 - bh + fs);
     g.textAlign = "left";
   }
 

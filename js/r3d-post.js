@@ -144,7 +144,7 @@ function r3dPostRender(){
   /* drive the grade from the sim: aberration from recent damage, and a
      per-district lift/gain grade from the theme's own grade colours */
   const u = R3DP.matComp.uniforms;
-  u.aberr.value = (typeof P !== "undefined" && P && P.hurtT > 0) ? Math.min(1, P.hurtT * 2.2) : (u.aberr.value * 0.9);
+  u.aberr.value = OPT.reduceMotion ? 0 : ((typeof P !== "undefined" && P && P.hurtT > 0) ? Math.min(1, P.hurtT * 2.2) : (u.aberr.value * 0.9));
   u.time.value = (u.time.value + 0.017) % 1000;
   try {
     const th = themeOf();
@@ -152,7 +152,7 @@ function r3dPostRender(){
     u.lift.value.setRGB(lo.r * 0.5, lo.g * 0.5, lo.b * 0.5);
     u.gain.value.setRGB(1.04, 1.02, 1.06);          // a touch cool in the highlights — the cyberpunk tilt
   } catch(e){}
-  u.grain.value = OPT.grain === 0 ? 0 : 0.028;
+  u.grain.value = (OPT.grain === 0 || OPT.reduceMotion) ? 0 : 0.028;
   u.vig.value = 0.26;
   R.setRenderTarget(null); R.render(R3DP.scene2, R3DP.cam);
   R.toneMapping = bakTM;

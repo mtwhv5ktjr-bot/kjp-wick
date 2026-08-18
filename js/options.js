@@ -30,12 +30,20 @@ const OPT_DEF = {
   fov: 62,            // 3D camera FOV; wider = more room, more distortion
   shadows: 1, bloom: 1, quality: "auto",   // the governor may step these down
   crt: 0, grain: 1,                        // v2.0.76/81 — CRT scanlines off by default, film grain on
+  reduceMotion: 0, highContrast: 0, cbMode: "off",   // v2.0.82-84 accessibility
+  masterVol: 1,                            // v2.0.90 master volume
   music: 1, sfx: 1,
   hints: 1,
   gore: 1
 };
 let OPT = Object.assign({}, OPT_DEF);
 try{ const s = JSON.parse(localStorage.getItem("kjp_opt") || "null"); if (s && typeof s === "object") OPT = Object.assign(OPT, s); }catch(e){}
+/* v2.0.91 — respect the OS accessibility setting on the FIRST run (before the
+   player has saved any options of their own). If they toggle it later, their
+   choice wins and this never overrides it again. */
+try{
+  if (!localStorage.getItem("kjp_opt") && matchMedia("(prefers-reduced-motion: reduce)").matches){ OPT.reduceMotion = 1; OPT.shake = 0; }
+}catch(e){}
 function saveOpt(){ try{ localStorage.setItem("kjp_opt", JSON.stringify(OPT)); }catch(e){} }
 function diff(){ return DIFFS[OPT.diff] || DIFFS.operative; }
 
@@ -129,6 +137,13 @@ function drawOptions(){
     ["BLOOM",         () => OPT.bloom ? "ON" : "OFF",               () => OPT.bloom = OPT.bloom ? 0 : 1,         "neon glow — the cyberpunk look"],
     ["FILM GRAIN",    () => OPT.grain ? "ON" : "OFF",               () => OPT.grain = OPT.grain ? 0 : 1,         "subtle sensor noise over the picture"],
     ["CRT SCANLINES", () => OPT.crt ? "ON" : "OFF",                 () => OPT.crt = OPT.crt ? 0 : 1,             "retro monitor lines — off by default"],
+    /* v2.0.82-84 accessibility */
+    ["REDUCE MOTION", () => OPT.reduceMotion ? "ON" : "OFF",        () => { OPT.reduceMotion = OPT.reduceMotion ? 0 : 1; if (OPT.reduceMotion) OPT.shake = 0; }, "stops shake, sway, camera swing, aberration"],
+    ["HIGH CONTRAST", () => OPT.highContrast ? "ON" : "OFF",        () => OPT.highContrast = OPT.highContrast ? 0 : 1, "brighter cones, thicker HUD outlines"],
+    ["COLOURBLIND",   () => ({off:"OFF",deut:"DEUTERAN",prot:"PROTAN",trit:"TRITAN"})[OPT.cbMode] || "OFF",
+                      () => { const m=["off","deut","prot","trit"]; OPT.cbMode = m[(m.indexOf(OPT.cbMode)+1)%m.length]; }, "recolours cones + state to a safe palette"],
+    ["MASTER VOLUME", () => Math.round(OPT.masterVol * 100) + "%",
+                      () => { const v=[0,0.25,0.5,0.75,1]; OPT.masterVol = v[(v.indexOf(OPT.masterVol)+1)%v.length]; applyAudioOpts(); }, "overall loudness"],
     ["LARGE TEXT",    () => OPT.bigText ? "ON" : "OFF",             () => OPT.bigText = OPT.bigText ? 0 : 1,     "bigger HUD and subtitles"],
     ["HINTS",         () => OPT.hints ? "ON" : "OFF",               () => OPT.hints = OPT.hints ? 0 : 1,         "contextual coaching in the field"],
     ["BLOOD",         () => OPT.gore ? "ON" : "OFF",                () => OPT.gore = OPT.gore ? 0 : 1,           "hits still register without it"],

@@ -520,7 +520,7 @@ function r3dAnimate(a, ent, moving, aiming, crouchT){
     const t = performance.now() / 1000, ph = ((ent.x * 0.013 + ent.y * 0.007) % 6.28);
     /* the sway lives on `upper`, not the root — put() writes the root's
        rotation.z every frame for the downed-body pose and would zero it */
-    const sway = Math.sin(t * 0.9 + ph) * 0.028;
+    const sway = OPT.reduceMotion ? 0 : Math.sin(t * 0.9 + ph) * 0.028;
     if (up){
       up.rotation.z = sway * 1.4;
       up.position.x = sway * 6;             // the hip shifts under the lean
@@ -825,9 +825,14 @@ function r3dSyncCones(){
   /* from crawl height the floor cones fill the whole view — halve them in a
      vent so they read as light on the floor, not as green walls */
   const vk = R3D._inVent ? 0.5 : 1;
-  const state = e => (e.st === "alert" || e.detect >= 1) ? [0xff4646, 0.30 * vk]
-                   : (e.st === "susp" || e.detect > 0.45) ? [0xffbe46, 0.26 * vk]
-                   : [0x9ee6ff, 0.15 * vk];
+  const hc = OPT.highContrast ? 1.7 : 1;      // v2.0.83
+  /* v2.0.84 — same colourblind palette as the 2D cones, via _cbTriplet, so
+     the floor cones and any 2D overlay always agree on the state colour */
+  const hex = s => { const [r, g2, b] = (typeof _cbTriplet === "function") ? _cbTriplet(s)
+    : (s === "alert" ? [255,70,70] : s === "susp" ? [255,190,70] : [158,230,255]); return (r << 16) | (g2 << 8) | b; };
+  const state = e => (e.st === "alert" || e.detect >= 1) ? [hex("alert"), 0.30 * vk * hc]
+                   : (e.st === "susp" || e.detect > 0.45) ? [hex("susp"), 0.26 * vk * hc]
+                   : [hex("calm"), 0.15 * vk * hc];
   for (let i = 0; i < LV.guards.length; i++){
     const e = LV.guards[i];
     if (down(e)) continue;
@@ -1039,7 +1044,7 @@ function r3dCamera(){
   let dolly = 0;
   if (typeof TD !== "undefined" && TD.t > 0){
     const p = 1 - TD.t / TD.dur;
-    dolly = Math.sin(Math.min(1, p * 1.5) * Math.PI) * 46;
+    dolly = Math.sin(Math.min(1, p * 1.5) * Math.PI) * (OPT.reduceMotion ? 16 : 46);   // v2.0.87 gentler push
   }
   /* v2.0.80 — FOCUS also creeps the camera in (the FOV narrow is folded into
      the stance target above; this is the dolly half of the lens move) */
@@ -1060,7 +1065,7 @@ function r3dCamera(){
      fades. Eased on the card's own clock so any input that skips the card
      also lands the camera. It reads the room's shape once, which is what
      stealth needs before the first step; and it is a free cinematic. */
-  if (typeof introT !== "undefined" && introT > 0 && !inVent){
+  if (typeof introT !== "undefined" && introT > 0 && !inVent && !OPT.reduceMotion){
     const k = Math.min(1, introT / 1.5);           // 1 at start → 0 at settle
     const e = k * k * (3 - 2 * k);                  // smoothstep
     const orbit = R3D._ca + Math.PI * 0.55 * e;     // swing around from the side

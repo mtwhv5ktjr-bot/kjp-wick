@@ -3,6 +3,19 @@
 Every entry is a shipped, verified change. The top entry MUST match `VERSION` in
 `js/core.js` — the ship gate refuses to deploy if it does not, so nothing ships unnumbered.
 
+## 2.0.91 — accessibility & content
+- **2.0.82** REDUCE MOTION — one toggle stops screen shake, guard idle sway, the intro camera swing, chromatic aberration and grain
+- **2.0.83** HIGH CONTRAST — brighter vision cones (2D and 3D floor), for readability
+- **2.0.84** COLOURBLIND modes (deuteran/protan/tritan) — recolours the calm/susp/alert state palette to stay distinct under each deficiency, in both the 2D cones and the 3D floor cones so they always agree
+- **2.0.85** six more death lines — variety so a fail screen is not the same punishment repeated
+- **2.0.86** AUTO-PAUSE on window blur — alt-tabbing mid-op no longer leaves KJP standing in a cone getting shot
+- **2.0.87** reduced-motion is comprehensive — also gentles the body bob and the takedown dolly
+- **2.0.88** fuller lifetime ledger on the DOSSIER — headshots, ghost clears, DEEP COVER best depth, daily streak
+- **2.0.89** LARGE TEXT actually scales subtitles now (it only ever touched the tutorial despite the label)
+- **2.0.90** MASTER VOLUME slider (0-100%) on the master bus
+- **2.0.91** respect the OS prefers-reduced-motion on the FIRST run only — the player's later choice always wins
+- Options grew to 3 columns to hold the new toggles without overrunning the buttons
+
 ## 2.0.81 — 3D post & combat FX (frame-time is user-to-confirm — see note)
 - **2.0.72** chromatic aberration in the bloom composite, swelling with damage; zero when unhurt so it costs nothing until it means something
 - **2.0.73** per-district lift/gamma/gain grade in the composite (linear-space, richer than the canvas multiply); the 2D drawPost grade is skipped on the GPU path to avoid doubling

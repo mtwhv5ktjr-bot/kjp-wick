@@ -637,6 +637,9 @@ function finishLevel(){
   c.runs = (c.runs || 0) + 1; c.kos = (c.kos || 0) + r.kos; c.kills = (c.kills || 0) + r.kills;
   c.intel = (c.intel || 0) + r.intel; c.alarms = (c.alarms || 0) + r.alarms;
   c.time = (c.time || 0) + r.time;
+  /* v2.0.88 — the marksman's ledger: headshots this run, and lifetime ghosts */
+  c.heads = (c.heads || 0) + (LV.stats.heads || 0);
+  if (r.ghost) c.ghosts = (c.ghosts || 0) + 1;
   saveProg();
   const wasDaily = DAILY_RUN;
   if (wasDaily) dailyFinish(r);            // banks the day's best AND restores difficulty
@@ -774,7 +777,15 @@ const DEATH_LINES = [
   ["Evidence bag 88-A remains in Agency custody.",           "“THE RECORD IS SEALED.”"],
   ["No obituary. They don't run those for assets.",          "“NO SUCH LAWYER.”"],
   ["Two kilos in the car. One counselor in the ground.",     "“CASE CLOSED.” — THEY WISH."],
-  ["Billable hours: terminated.",                            "“OBJECTION. OVERRULED. PERMANENTLY.”"]
+  ["Billable hours: terminated.",                            "“OBJECTION. OVERRULED. PERMANENTLY.”"],
+  /* v2.0.85 more death lines — variety is what keeps a fail screen from
+     feeling like a punishment repeated */
+  ["The switchboard operator never got to testify.",         "“RECESS. INDEFINITE.”"],
+  ["Regina Gyatt reads the file alone tonight.",             "“CONTINUANCE DENIED.”"],
+  ["They kept the coins. They kept the tag. They kept you.", "“SETTLED OUT OF COURT.”"],
+  ["Somewhere a frog-green suit hangs in an evidence locker.","“EXHIBIT A: THE BODY.”"],
+  ["He always said he'd see them in the courtroom.",         "“HE NEVER MADE THE HEARING.”"],
+  ["The Director signed the discharge himself.",             "“MOTION TO DISMISS — GRANTED.”"]
 ];
 function drawDead(){
   UIB = [];
@@ -1157,18 +1168,24 @@ function drawDossier(){
 
   /* lifetime tallies */
   const S = PROG.career || {};
+  /* v2.0.88 — a fuller ledger: headshots, ghost clears, and the DEEP COVER
+     record now sit alongside the lifetime tallies */
   const tallies = [
     ["OPS RUN", S.runs || 0], ["OPS CLEARED", clearedCount()],
     ["SLEEPERS", S.kos || 0], ["KILLS", S.kills || 0],
+    ["HEADSHOTS", S.heads || 0], ["GHOST CLEARS", S.ghosts || 0],
     ["EXHIBITS", S.intel || 0], ["ALARMS", S.alarms || 0],
+    ["DEEP COVER BEST", "D" + ((PROG.deep && PROG.deep.depth) || 0)], ["DAILY STREAK", (typeof streakCalc === "function" ? streakCalc().days : 0) + "d"],
     ["TIME IN THE BUILDING", fmtTime(S.time || 0)], ["CAMPAIGN", campaignScore().toLocaleString() + " pts"]
   ];
+  /* v2.0.88 — 6 per row, more compact, so the 12 tallies fit two rows above
+     the ribbons instead of a third row landing on the CHALLENGE RIBBONS header */
   tallies.forEach(([k, v], i) => {
-    const x = 70 + (i % 4) * 232, y = 132 + (i / 4 | 0) * 70;
-    g.fillStyle = "rgba(9,14,18,0.85)"; g.fillRect(x, y, 216, 56);
-    g.strokeStyle = "#243040"; g.lineWidth = 1.5; g.strokeRect(x + 1, y + 1, 214, 54);
-    g.font = "900 9px Arial Black"; g.fillStyle = "#57717f"; g.fillText(k, x + 12, y + 19);
-    g.font = "900 20px Arial Black"; g.fillStyle = "#e6f1ff"; g.fillText(String(v), x + 12, y + 44);
+    const x = 70 + (i % 6) * 190, y = 132 + (i / 6 | 0) * 62;
+    g.fillStyle = "rgba(9,14,18,0.85)"; g.fillRect(x, y, 176, 50);
+    g.strokeStyle = "#243040"; g.lineWidth = 1.5; g.strokeRect(x + 1, y + 1, 174, 48);
+    g.font = "900 8px Arial Black"; g.fillStyle = "#57717f"; g.fillText(k, x + 10, y + 17);
+    g.font = "900 18px Arial Black"; g.fillStyle = "#e6f1ff"; g.fillText(String(v), x + 10, y + 40);
   });
   /* per-op ribbon grid */
   g.font = "900 14px Arial Black"; g.fillStyle = "#9fd7b0"; g.fillText("CHALLENGE RIBBONS", 70, 300);

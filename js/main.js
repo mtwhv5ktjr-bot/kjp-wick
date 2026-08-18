@@ -29,6 +29,13 @@ function startLevel(n){
   }, 60);
 }
 
+/* v2.0.86 AUTO-PAUSE. Alt-tabbing mid-op used to leave KJP standing in a
+   cone getting shot while you read an email. Losing window focus during a
+   live op now pauses it — the single most-requested quality-of-life fix in
+   any real-time game, and here it also stops a guard from finding you while
+   you are not even looking. */
+addEventListener("blur", () => { if (STATE === "game" && LV && !LV.over){ STATE = "pause"; KEYS.clear(); } });
+
 /* first gesture births the AudioContext (autoplay policy) */
 let audioArmed = false;
 function armAudio(){

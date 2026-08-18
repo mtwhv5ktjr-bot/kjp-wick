@@ -61,6 +61,7 @@ function roomFor(theme){
 function applyAudioOpts(){
   if (!BUS.master) return;
   const now = AC ? AC.currentTime : 0;
+  BUS.master.gain.setTargetAtTime(0.9 * (OPT.masterVol === undefined ? 1 : OPT.masterVol), now, 0.05);   // v2.0.90
   BUS.sfx.gain.setTargetAtTime(OPT.sfx ? 1 : 0, now, 0.05);
   BUS.music.gain.setTargetAtTime(OPT.music ? 1 : 0, now, 0.08);
   BUS.amb.gain.setTargetAtTime(OPT.sfx ? 0.5 : 0, now, 0.08);
