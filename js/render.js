@@ -1578,7 +1578,12 @@ function drawHUD(){
       }
       const col = hot ? "#ff6b6b" : "rgba(230,241,255,0.72)";
       g.strokeStyle = col; g.lineWidth = 1.6;
-      const r0 = 4, r1 = 11;
+      /* v2.0.26 the reticle OPENS with bloom and movement — a live spread
+         readout, the same language every shooter since Counter-Strike uses.
+         Tight = accurate; open = wait or brace. Honest to the sim: it reads
+         the exact bloom the next round will use. */
+      const open = ((P.bloom || 0) * (P.moving ? 1.6 : 1)) * 220 + (P.moving ? 4 : 0);
+      const r0 = 4 + open, r1 = 11 + open;
       for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]){
         g.beginPath();
         g.moveTo(aim.x + Math.cos(a) * r0, aim.y + Math.sin(a) * r0);
@@ -1970,6 +1975,12 @@ function drawPost(){
   /* vignette — softened in 3D: the world already carries fog and real
      shadows, and the heavy 2D-era vignette was eating a third of the
      brightness the tone-mapping pass just bought */
+  /* v2.0.21 FLASHED — the whiteout, decaying. Drawn on top of everything so
+     the HUD goes too: you genuinely cannot see. */
+  if (P && P.flashT > 0 && STATE === "game"){
+    g.fillStyle = "rgba(255,255,255," + Math.min(1, P.flashT / 2.2 * 1.3).toFixed(3) + ")";
+    g.fillRect(0, 0, W, H);
+  }
   /* DEATH DRAIN — the frame loses its colour over the beat. Canvas has no
      desaturate blend, but a grey wash at "saturation" composite is the exact
      operation: it pulls every pixel toward its own luma. */

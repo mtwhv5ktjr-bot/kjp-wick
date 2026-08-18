@@ -982,6 +982,12 @@ function r3dCamera(){
     R3D._la.set(P.x, 10, P.y);
     cam.lookAt(R3D._la);
   }
+  /* v2.0.25 RECOIL KICK — the camera pitches UP on the shot and settles.
+     Small, fast, and it is what makes a gun feel like it fires something. */
+  if (P && P.kickT > 0 && OPT.shake){
+    cam.position.y += P.kickT * 18;
+    cam.rotateX(P.kickT * 0.5);
+  }
   if (shakeT > 0 && OPT.shake){
     cam.position.x += (rnd() - 0.5) * shakeAmp * 1.6;
     cam.position.z += (rnd() - 0.5) * shakeAmp * 1.6;

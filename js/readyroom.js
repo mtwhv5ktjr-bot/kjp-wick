@@ -174,6 +174,38 @@ function drawReadyRoom(){
 
   /* ---- the one real choice: two guns ---- */
   const by0 = H - 132;
+  /* v2.0.24 GADGET KIT — five of eight, as chips above the gun row. Same
+     tap-to-toggle language as the guns; the count is the constraint. */
+  {
+    const kit = (PROG.gadKit && PROG.gadKit.length === 5) ? PROG.gadKit.slice() : ["emp", "smoke", "lure", "thermal", "breach"];
+    const gy = by0 - 46, ids = Object.keys(GADGETS);
+    g.font = "900 10px Arial Black"; g.fillStyle = "#9fd7b0";
+    g.fillText("KIT — " + kit.length + "/5", 60, gy - 6);
+    g.font = "700 8px Verdana"; g.fillStyle = "#57717f";
+    g.fillText("five gadgets walk in with you · tap to swap", 130, gy - 6);
+    let cx = 60;
+    for (const id of ids){
+      const gd = GADGETS[id], on = kit.includes(id), cw = 128, ch = 30;
+      const hot = MOUSE.x >= cx && MOUSE.x <= cx + cw && MOUSE.y >= gy && MOUSE.y <= gy + ch;
+      g.fillStyle = on ? "rgba(48,38,10,0.95)" : hot ? "rgba(18,38,28,0.9)" : "rgba(9,16,13,0.85)";
+      g.fillRect(cx, gy, cw, ch);
+      g.strokeStyle = on ? "#ffd27c" : hot ? "#7cf9a5" : "#2a3540"; g.lineWidth = on ? 2 : 1;
+      g.strokeRect(cx + 0.5, gy + 0.5, cw - 1, ch - 1);
+      g.font = "900 9px Arial Black"; g.fillStyle = on ? "#ffd27c" : "#8ba3b8";
+      g.fillText(gd.ic + " " + gd.name, cx + 8, gy + 13);
+      g.font = "700 8px Verdana"; g.fillStyle = on ? "#c9a86a" : "#4e5c68";
+      g.fillText("×" + gd.n + (on ? " · IN KIT" : ""), cx + 8, gy + 24);
+      UIB.push({ x: cx, y: gy, w: cw, h: ch, cb: () => {
+        let k = kit.slice();
+        if (k.includes(id)) k = k.filter(q => q !== id);
+        else { k.push(id); if (k.length > 5) k.shift(); }
+        /* a kit is exactly five: keep it valid or the sim falls back to default */
+        PROG.gadKit = k.length === 5 ? k : (k.length < 5 ? k.concat(ids.filter(q => !k.includes(q)).slice(0, 5 - k.length)) : k.slice(-5));
+        saveProg(); SFX.ui2();
+      } });
+      cx += cw + 6;
+    }
+  }
   g.font = "900 12px Arial Black"; g.fillStyle = "#9fd7b0";
   g.fillText("SLING TWO — " + carry.length + "/2", 60, by0 - 8);
   g.font = "700 9px Verdana"; g.fillStyle = "#57717f";

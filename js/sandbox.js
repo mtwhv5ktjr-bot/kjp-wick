@@ -193,14 +193,23 @@ const GADGETS = {
   smoke:  { name: "SMOKE",       ic: "💨", n: 2, blurb: "a wall nobody can see through" },
   lure:   { name: "LURE BEACON", ic: "📡", n: 2, blurb: "a noise that keeps making itself" },
   thermal:{ name: "THERMAL",     ic: "🔥", n: 1, blurb: "see them through the walls, 12s" },
-  breach: { name: "BREACH CHG",  ic: "💥", n: 1, blurb: "opens any door. loudly." }
+  breach: { name: "BREACH CHG",  ic: "💥", n: 1, blurb: "opens any door. loudly." },
+  /* v2.0.21-23 THREE NEW VERBS, each answering a problem the new sim created */
+  flash:  { name: "FLASHBANG",   ic: "✴", n: 1, blurb: "blinds everyone looking at it, 4s — YOU too if you look" },
+  cutter: { name: "WIRE CUTTER", ic: "✂", n: 1, blurb: "kills one camera or laser silently, permanently" },
+  decoy:  { name: "DECOY TAPE",  ic: "📼", n: 1, blurb: "plays YOUR footsteps on loop — dogs and noise-memory chase it" }
 };
 function gadgetUse(){
   const id = P.gads[P.gi];
   if (!id || (P.gadN[id] | 0) <= 0){ SFX.dry(); return; }
   P.gadN[id]--;
-  const aimD = Math.min(280, dist(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y));
-  const a = angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);
+  /* v2.0.31 (found while verifying 2.0.21) — in 3D, gadgets aimed via
+     camX+MOUSE, the 2D scroll offset, which is stale at (0,0) in the 3D
+     renderer: every throw went toward the WORLD ORIGIN, not where you looked.
+     Use the unprojected aim point, exactly as the guns do. */
+  const aw = (typeof R3D !== "undefined" && R3D.on && R3D.aimWorld) ? R3D.aimWorld : { x: camX + MOUSE.x, y: camY + MOUSE.y };
+  const aimD = Math.min(280, dist(P.x, P.y, aw.x, aw.y));
+  const a = angTo(P.x, P.y, aw.x, aw.y);
   const reach = Math.min(aimD, ray(P.x, P.y, a, 280) - 12);
   const tx = P.x + Math.cos(a) * reach, ty = P.y + Math.sin(a) * reach;
   if (id === "emp"){
@@ -225,6 +234,41 @@ function gadgetUse(){
     if (best){ best.broken = true; SFX.breach(); shake(9); addNoise(best.x * T, best.y * T, 460, "gun");
       heatAdd(1, "breaching charge"); toast("💥 door gone", "#ffd27c"); }
     else { P.gadN.breach++; SFX.dry(); toast("no door in range", "#8a97a8"); }
+  } else if (id === "flash"){
+    /* v2.0.21 FLASHBANG. Everyone whose facing includes the flash point is
+       blind for 4s: guards drop to a stunned "search" with zero detection, and
+       lose their target. It is LOUD (a firefight tool, not a stealth one) and
+       it is HONEST — if KJP is looking at it, his screen whites out too. */
+    LV.fx.push({ x: tx, y: ty, vx: 0, vy: 0, t: 0.5, kind: "ring", col: "#ffffff" });
+    let n = 0;
+    for (const e of LV.guards.concat(LV.dogs)){
+      if (down(e) || dist(e.x, e.y, tx, ty) > 240) continue;
+      if (Math.abs(angDiff(e.ang, angTo(e.x, e.y, tx, ty))) > 1.6) continue;   // facing away: fine
+      e.flashT = 4; e.detect = 0; e.target = null; e.path = null; e.acqT = 0;
+      if (e.st === "alert") e.st = "search";
+      n++;
+    }
+    if (Math.abs(angDiff(P.ang, angTo(P.x, P.y, tx, ty))) < 1.2 && dist(P.x, P.y, tx, ty) < 260) P.flashT = 2.2;
+    SFX.breach(); shake(7); addNoise(tx, ty, 380, "gun");
+    toast("✴ FLASH — " + n + " blinded" + (P.flashT ? " (you too — LOOK AWAY next time)" : ""), "#ffffff");
+  } else if (id === "cutter"){
+    /* v2.0.22 WIRE CUTTER. The EMP is loud-ish and temporary; the cutter is
+       silent and permanent, but ONE target and you must be within reach of it.
+       Answers "there is a camera on the only route" without a firefight. */
+    let best = null, bd = 60;
+    for (const c of LV.cams){ if (c.dead) continue; const dd = dist(c.x * (c.x < 100 ? T : 1), c.y * (c.y < 100 ? T : 1), tx, ty); if (dd < bd){ bd = dd; best = c; } }
+    for (const c of LV.cams){ if (c.dead) continue; const dd = dist(c.x, c.y, P.x, P.y); if (dd < 60 && dd < bd){ bd = dd; best = c; } }
+    const lz = (LV.lasers || []).find(l => !l.cut && dist((l.x1 + l.x2) / 2 * T, (l.y1 + l.y2) / 2 * T, P.x, P.y) < 70);
+    if (best){ best.dead = true; SFX.unlock(); toast("✂ camera cut — silently, for good", "#7cf9a5"); }
+    else if (lz){ lz.cut = true; SFX.unlock(); toast("✂ laser cut", "#7cf9a5"); }
+    else { P.gadN.cutter++; SFX.dry(); toast("stand next to a camera or laser", "#8a97a8"); }
+  } else if (id === "decoy"){
+    /* v2.0.23 DECOY TAPE. A lure that sounds like YOU: it drops "step" and
+       "track" noises on a loop, which means dogs (v2.0.18) chase it as scent
+       and noise-memory (v2.0.5) escalates it to a full search on the third
+       tick — the perfect bait for the exact systems that made you careful. */
+    LV.lures.push({ x: tx, y: ty, t: 14, tick: 0, decoy: true });
+    toast("📼 tape rolling — it walks like you", "#8fc7ff");
   }
 }
 function gadgetsUpdate(dt){
@@ -233,8 +277,14 @@ function gadgetsUpdate(dt){
   LV.smokes = LV.smokes.filter(s => s.t > 0);
   for (const l of LV.lures){
     l.t -= dt; l.tick -= dt;
-    if (l.tick <= 0){ l.tick = 1.1; addNoise(l.x, l.y, 200, "lure"); sfxAt(l.x, l.y, () => SFX.knock()); }
+    if (l.tick <= 0){
+      if (l.decoy){ l.tick = 0.45; addNoise(l.x, l.y, 60, "step"); addNoise(l.x, l.y, 26, "track"); sfxAt(l.x, l.y, () => SFX.step(false, false)); }
+      else { l.tick = 1.1; addNoise(l.x, l.y, 200, "lure"); sfxAt(l.x, l.y, () => SFX.knock()); }
+    }
   }
+  /* flash timers, guard and player */
+  for (const e of LV.guards.concat(LV.dogs)) if (e.flashT > 0) e.flashT -= dt;
+  if (P.flashT > 0) P.flashT -= dt;
   LV.lures = LV.lures.filter(l => l.t > 0);
   for (const L of LIGHTS) if (L.empT){ L.empT -= dt; if (L.empT <= 0){ L.dead = false; L.empT = 0; } }
 }
@@ -303,7 +353,14 @@ function sandboxInit(){
   LV.heatDecay = 0; LV.heatFlash = 0;
   LV.vehs = []; LV.smokes = []; LV.lures = []; LV.props = []; LV.stash = []; LV.loot = [];
   P.disguise = null; P.blown = 0; P.veh = null; P.stashed = false; P.thermal = 0;
-  P.gads = ["emp", "smoke", "lure", "thermal", "breach"];
+  /* v2.0.24 GADGET LOADOUT. Eight gadgets in one cycle is too many to flick
+     through with a guard on you. Five slots, chosen in the ready room (a
+     PROG.gadKit of ids), defaulting to a balanced kit. The choice is the
+     point: taking the flashbang means leaving the cutter — a stealth kit and
+     a loud kit are different loadouts, like the guns are. */
+  const kit = (PROG.gadKit && PROG.gadKit.length === 5 && PROG.gadKit.every(k => GADGETS[k]))
+    ? PROG.gadKit.slice() : ["emp", "smoke", "lure", "thermal", "breach"];
+  P.gads = kit;
   P.gadN = {}; for (const k of P.gads) P.gadN[k] = GADGETS[k].n;
   P.gi = 0;
   srand(LV.n * 4242 + 7);

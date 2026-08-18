@@ -3,6 +3,19 @@
 Every entry is a shipped, verified change. The top entry MUST match `VERSION` in
 `js/core.js` — the ship gate refuses to deploy if it does not, so nothing ships unnumbered.
 
+## 2.0.31 — the tools: more verbs, and guns that feel like guns
+- **2.0.21** FLASHBANG — blinds everyone facing it for 4s (guards drop target and detection); loud; and honest — look at it yourself and your screen whites out too
+- **2.0.22** WIRE CUTTER — kills one camera or laser silently and permanently; must be within reach. Answers "a camera on the only route" without a firefight
+- **2.0.23** DECOY TAPE — a lure that sounds like YOU: loops step+track noises, so dogs chase it as scent and noise-memory escalates it to a full search
+- **2.0.24** GADGET KIT — five of eight, chosen in the ready room as chips above the gun row; a stealth kit and a loud kit are different loadouts now
+- **2.0.25** RECOIL + BLOOM — each round adds bloom decaying over ~0.6s (cadence stays tight, mag-dumping sprays), and the camera kicks per shot; sneak-fire is braced and steadier
+- **2.0.26** the reticle OPENS with bloom and movement — a live spread readout honest to the exact next-round spread
+- **2.0.27** swap has a cost — 0.32s raising the new gun during which you cannot fire; bloom resets. Kills the tranq↔9mm-every-shot loop
+- **2.0.28** HEADSHOTS — through the centre 5px: 2.2x and a one-shot drop (not the Director/dogs); tranq gets an instant sleep. Rare by geometry, never turns it into a shooter
+- **2.0.29** the FINISHER — punching a sleeping/KO'd guard is a silent kill: no gunshot, but it IS a kill — costs PACIFIST, adds heat if found. The ugly efficient option, charged honestly
+- **2.0.30** the last three rounds click differently — you hear the reload coming without reading a number
+- **2.0.31** FIX (found verifying 2.0.21): in 3D every gadget throw went toward the WORLD ORIGIN — gadgetUse aimed via the 2D scroll offset, stale at (0,0). Now uses the unprojected aim point, like the guns
+
 ## 2.0.20 — the guards: firefights become tactical
 - **2.0.11** first-shot delay — 0.35s raise-and-acquire (0.2 for sentries) before the first round; breaking line of sight is a real move now, not a coin-flip
 - **2.0.12** accuracy is a function of range and YOUR movement — spread widens with distance and when you sprint; moving through fire is survivable, standing in it is not

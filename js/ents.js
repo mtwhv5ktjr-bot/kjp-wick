@@ -115,6 +115,7 @@ function lightFactorAt(x, y){
    legitimate legal strategy. Dogs don't care (nose), cameras don't care (IR). */
 function seesPlayer(e, range, fov, ignoreLight){
   if (P.dead || P.stashed) return 0;                  // a closed bin has no silhouette
+  if (e.flashT > 0) return 0;                         // v2.0.21 flashed: sees nothing
   const d = dist(e.x, e.y, P.x, P.y);
   const lightMul = ignoreLight ? 1 : (0.62 + 0.5 * (P.litF == null ? 1 : P.litF));
   const R = range * (skinDef().detectMul || 1) * (P.sneak ? 0.62 : 1) * lightMul * diff().detect;
@@ -265,6 +266,9 @@ function playerUpdate(dt){
      under the threshold where input feels laggy, over the one where motion
      reads as staccato. The smoothed vector REPLACES the raw one everywhere
      below, so stride, noise and collision all see the same fluid motion. */
+  /* v2.0.25 recoil bloom decays; the kick decays faster */
+  P.bloom = Math.max(0, (P.bloom || 0) - dt * 0.24);
+  P.kickT = Math.max(0, (P.kickT || 0) - dt * 1.4);
   /* v2.0.10 — during a stagger the player's input barely registers; the shove
      from the hit is what moves him */
   if (P.staggerT > 0){ P.staggerT -= dt; mx *= 0.15; my *= 0.15; }
@@ -392,7 +396,16 @@ function playerUpdate(dt){
   }
 
   /* weapon cycling */
-  if (PRESS.has("KeyQ") || WHEEL){ P.wi = (P.wi + 1 + (WHEEL < 0 ? P.weapons.length - 2 : 0)) % P.weapons.length; SFX.ui(); P.reloadT = 0; }
+  if (PRESS.has("KeyQ") || WHEEL){
+    P.wi = (P.wi + 1 + (WHEEL < 0 ? P.weapons.length - 2 : 0)) % P.weapons.length; SFX.ui(); P.reloadT = 0;
+    /* v2.0.27 SWAP HAS A COST. Weapon switching was instant, so the optimal
+       loop was tranq→9mm→tranq every shot. 0.32s of "raising it" during which
+       you cannot fire — long enough that you commit to a gun for a moment,
+       short enough that it never feels like a menu. Bloom resets: a fresh
+       gun is a fresh sight picture. */
+    P.fireT = Math.max(P.fireT || 0, 0.32); P.bloom = 0; P.swapT = 0.32;
+  }
+  P.swapT = Math.max(0, (P.swapT || 0) - dt);
   for (let i = 0; i < 6; i++) if (PRESS.has("Digit" + (i + 1)) && P.weapons[i]) P.wi = i;
 
   /* fire / melee */
@@ -454,6 +467,20 @@ function _finishReload(){
 function _punch(){
   P.fireT = 0.32; SFX.hit(); addNoise(P.x, P.y, 70, "punch");
   fxMuzzle(P.x + Math.cos(P.ang) * 20, P.y + Math.sin(P.ang) * 20, P.ang, "#9fd7b0", 3);
+  /* v2.0.29 THE FINISHER. Punching a SLEEPING or KO'd guard used to do nothing.
+     Now it is a silent kill: no noise beyond the punch, no gunshot, but it IS
+     a kill — it counts against PACIFIST, adds heat if found, and the body
+     never wakes to re-find you. The stealth game's ugliest efficient option,
+     offered honestly: the sim charges you the rank for it. */
+  for (const e of LV.guards){
+    if (!(e.sleep > 0 || e.ko > 0) || e.dead || e.cuffed || dist(P.x, P.y, e.x, e.y) > 46) continue;
+    if (Math.abs(angDiff(P.ang, angTo(P.x, P.y, e.x, e.y))) > 1) continue;
+    e.dead = true; e.sleep = 0; e.ko = 0; LV.stats.kills++;
+    heatAdd(1, "a body that will not wake up");
+    if (OPT.gore) LV.decals.push({ x: e.x, y: e.y, r: 5, max: 14 + rnd() * 8, col: "rgba(120,20,26,0.5)" });
+    SFX.thud(); toast("finished — he stays down. that cost you PACIFIST.", "#ff8f8f");
+    return;
+  }
   for (const e of LV.guards.concat(LV.dogs, LV.civs)){
     if (down(e)) continue;
     if (dist(P.x, P.y, e.x, e.y) < 52 && Math.abs(angDiff(P.ang, angTo(P.x, P.y, e.x, e.y))) < 1){
@@ -483,12 +510,27 @@ function _fire(wid, wBase){
   }
   P.fireT = 1 / w.rps; P.ammoIn[wid]--;
   LV.stats.shots++;
+  /* v2.0.30 THE LAST THREE. Running dry mid-fight with no warning is the
+     cheapest death there is. The final three rounds of a mag click
+     differently on the way out — you hear the reload coming without
+     looking at a number. */
+  if ((P.ammoIn[wid] | 0) <= 3 && (P.ammoIn[wid] | 0) > 0 && !w.dart) setTimeout(() => SFX.ui2(), 40);
+  /* v2.0.25 RECOIL + BLOOM. Every shot was as accurate as the first. Now each
+     round adds bloom that decays over ~0.6s, so a controlled cadence stays
+     tight and mag-dumping sprays — and the camera KICKS a few degrees per shot
+     (more for loud guns) which is what makes a gun feel like it fires
+     something. Sneak-fire is steadier: a braced stance. Suppressor mod
+     already softens noise; now it also softens the kick a touch. */
+  P.bloom = Math.min(0.14, (P.bloom || 0) + (w.pellets ? 0.05 : w.dart ? 0.012 : 0.028) * (P.sneak ? 0.6 : 1));
+  const kick = (w.dart ? 0.006 : w.silenced ? 0.014 : w.pellets ? 0.05 : 0.026) * (P.sneak ? 0.55 : 1);
+  P.ang += (rnd() < 0.5 ? -1 : 1) * kick * 0.4;      // a little yaw wander
+  P.kickT = Math.max(P.kickT || 0, kick * 6);          // camera reads this
   const n = w.pellets || (w.fan || 1);
   for (let i = 0; i < n; i++){
     let a = P.ang;
     if (w.pellets) a += (rnd() - 0.5) * 0.35;
     else if (w.fan) a += (i - (n - 1) / 2) * 0.16;
-    a += (rnd() - 0.5) * (w.spread || 0);
+    a += (rnd() - 0.5) * ((w.spread || 0) + (P.bloom || 0) * (P.moving ? 1.6 : 1));
     LV.bullets.push({
       x: P.x + Math.cos(P.ang) * 20, y: P.y + Math.sin(P.ang) * 20,
       vx: Math.cos(a) * w.spd, vy: Math.sin(a) * w.spd,
@@ -1367,6 +1409,15 @@ function bulletsUpdate(dt){
         }
         for (const e of LV.guards.concat(LV.dogs, LV.civs)){
           if (down(e) || dist(b.x, b.y, e.x, e.y) > (e.r || 13) + 4) continue;
+          /* v2.0.28 HEADSHOTS. A round through the centre 5px of the body
+             circle — the head, in top-down terms — does 2.2x and drops a guard
+             (not the Director) in one no matter his HP. Placement rewarded,
+             spray punished; the tranq gets it too, as an instant sleep. Rare
+             enough by geometry that it never turns the game into a shooter. */
+          const dh = dist(b.x, b.y, e.x, e.y);
+          const headshot = dh < 5 && e.kind !== "director" && e.kind !== "dog" && !b.pellets;
+          if (headshot){ b.dmg *= 2.2; if (!b.sleep && b.dmg > 0) b.dmg = Math.max(b.dmg, e.hp + 0.01); LV.stats.heads = (LV.stats.heads || 0) + 1;
+            toast(b.sleep ? "🎯 CLEAN — out cold" : "🎯 HEADSHOT", "#ffd27c"); SFX.unlock(); }
           if (b.sleep){
             e.sleep = b.sleep; e.detect = 0; e.radioT = -1; e.hits = 0;
             SFX.thud(); fxZzz(e.x, e.y); LV.stats.kos++;
