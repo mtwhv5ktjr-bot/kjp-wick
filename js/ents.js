@@ -86,6 +86,7 @@ function nearestPathTo(e, tx, ty, who){
 }
 function walkPath(e, spd, dt){
   if (!e.path || e.pathI >= e.path.length) return true;
+  if (e.wounded) spd *= 0.6;                          // v2.0.16 the limp
   const [tx, ty] = e.path[e.pathI];
   const gx = tx * T + T / 2, gy = ty * T + T / 2;
   const d = dist(e.x, e.y, gx, gy);
@@ -138,7 +139,16 @@ function goCombat(fromX, fromY){
        wall-clock setTimeout, so headless step() and pause behave) */
     if (!LV.reinforced && (LV.def.spawnPts || []).length && !LV.def.exfil){
       LV.reinforced = 1;
-      LV.waveQ.push({ t: 5, n: 2 });
+      /* v2.0.20 THE QRF SCALES WITH HEAT. A first firefight always brought
+         exactly two men, whether you had been a ghost or had burned the floor
+         down. Now the wave is sized by the 5-star heat: cold = 1 man in 8s
+         (a patrol checking in), hot = 4 men in 3s (a real response). And a
+         SECOND wave queues at 4+ stars — the building does not run out of
+         people; you run out of time. Heat is the dial the player has always
+         controlled; now it controls the consequence too. */
+      const h = LV.heat | 0;
+      LV.waveQ.push({ t: h >= 4 ? 3 : h >= 2 ? 5 : 8, n: h >= 4 ? 4 : h >= 2 ? 2 : 1 });
+      if (h >= 4) LV.waveQ.push({ t: 14, n: 3 });
     }
   }
   LV.alert = 2; LV.alertT = 12; LV.lastKnown = { x: fromX, y: fromY };
@@ -158,6 +168,9 @@ const BARKS = {
   lost:     ["Lost him — fan out, he's CLOSE", "Where — WHERE? Spread out!", "He was just here… check the corners"],
   giveup:   ["…must've been nothing", "Probably rats. Again.", "Going back to my post…"],
   heldup:   ["OK— OK. Easy. EASY.", "Don't. Please. I have a boat payment.", "You're the lawyer, right? Oh no."],
+  reload:   ["RELOADING — cover me!", "Changing mags!", "I'm DRY — cover!"],
+  flank:    ["Going LEFT — push him!", "I'll take the side!", "Flanking — keep him busy!"],
+  hurt:     ["I'm HIT — I'm hit!", "He got me — keep going!", "Ahh— still in the fight!"],
   director: ["I know you're on this floor, counselor.", "You can't cuff EVERYONE, Pierre.", "The file stays. YOU stay."]
 };
 function guardBark(e, kind, prio){
@@ -920,23 +933,85 @@ function guardUpdate(e, dt){
     if (canSee){ e.target = { x: P.x, y: P.y }; if (LV.alert === 2){ LV.lastKnown = { x: P.x, y: P.y }; LV.alertT = 12; } }
     const d = dist(e.x, e.y, P.x, P.y);
     if (canSee && d < 470){
+      /* v2.0.11 FIRST-SHOT DELAY. A guard used to open fire the FRAME he
+         acquired you — no human does that. 0.35s of "raise and acquire"
+         before the first round (0.2 for sentries, who are trained for it),
+         which is the window that makes breaking line of sight a real move
+         instead of a coin-flip. Resets when he loses you. */
+      if (!e.acqT){ e.acqT = e.kind === "sentry" ? 0.2 : 0.35; e.shootT = Math.max(e.shootT, e.acqT); }
+      /* v2.0.12 ACCURACY IS A FUNCTION OF RANGE AND OF YOUR MOVEMENT. Spread was
+         a flat 0.12 rad at every distance. Now it widens with range and when
+         you are moving fast — sprinting across a doorway at 300px is survivable,
+         standing still at 80px is not. Rewards moving through fire, punishes
+         standing in it, exactly the way cover shooters teach. */
+      const moveMul = P.runFx ? 1.9 : P.moving ? 1.35 : 1;
+      const spread = (0.05 + d / 470 * 0.16) * moveMul * (P.sneak ? 1.25 : 1);
+      /* v2.0.13 SUPPRESSION: a guard under fire himself shoots worse. Every
+         player round that passes within 40px in the last second widens his
+         spread and delays his next shot — so laying fire on a doorway does
+         what it does in reality: keeps heads down. */
+      e.suppT = Math.max(0, (e.suppT || 0) - dt);
+      const suppMul = 1 + e.suppT * 1.5;
       e.ang += angDiff(e.ang, angTo(e.x, e.y, P.x, P.y)) * Math.min(1, dt * 12);
       e.shootT -= dt;
       if (e.shootT <= 0){
-        if (e.burst <= 0){ e.burst = e.gun === "smg" ? 5 : 3; e.shootT = 0.75; }
+        if (e.burst <= 0){ e.burst = e.gun === "smg" ? 5 : 3; e.shootT = 0.75 * suppMul; }
         else {
-          e.burst--; e.shootT = e.gun === "smg" ? 0.09 : 0.16;
-          const a = e.ang + (rnd() - 0.5) * 0.12;
+          e.burst--; e.shootT = (e.gun === "smg" ? 0.09 : 0.16) * suppMul;
+          const a = e.ang + (rnd() - 0.5) * spread * suppMul;
           LV.bullets.push({ x: e.x + Math.cos(e.ang) * 18, y: e.y + Math.sin(e.ang) * 18,
             vx: Math.cos(a) * 760, vy: Math.sin(a) * 760, dmg: 0.5, fromPlayer: false, t: 1.2 });
           fxMuzzle(e.x + Math.cos(e.ang) * 20, e.y + Math.sin(e.ang) * 20, e.ang, "#ffd27c", 6);
           SFX.shot(); addNoise(e.x, e.y, 300, "gun");
+          /* v2.0.14 MAGAZINES. Infinite guard ammo meant a firefight never
+             gave you a rhythm. 12 rounds (30 for the smg) then a 1.6s reload
+             during which he stops shooting and — new — pulls toward cover.
+             The reload IS the moment to move; you learn to count. */
+          e.mag = (e.mag === undefined ? (e.gun === "smg" ? 30 : 12) : e.mag) - 1;
+          if (e.mag <= 0){ e.mag = e.gun === "smg" ? 30 : 12; e.shootT = 1.6; e.burst = 0; e.reloading = 1.6; guardBark(e, "reload", 1); }
         }
       }
-      if (d > 180 && e.repathT <= 0){ nearestPathTo(e, Math.floor(e.target.x / T), Math.floor(e.target.y / T), "g"); e.repathT = 0.6; }
+      if (e.reloading > 0){
+        e.reloading -= dt;
+        /* v2.0.17 RELOAD BEHIND COVER. On empty, the guard side-steps toward
+           the nearest wall tile that breaks your line of sight — a real
+           reload is done behind something. He is briefly OUT of your line,
+           which is exactly when a good player repositions rather than waits. */
+        if (!e.coverPt){
+          let best = null, bd = 1e9;
+          for (let a2 = 0; a2 < TAU; a2 += TAU / 8){
+            const cx = e.x + Math.cos(a2) * 44, cy = e.y + Math.sin(a2) * 44;
+            if (solidMove(Math.floor(cx / T), Math.floor(cy / T), "g", { pathing: true })) continue;
+            if (los(cx, cy, P.x, P.y, false, false)) continue;      // must actually hide him
+            const dd = dist(cx, cy, e.x, e.y); if (dd < bd){ bd = dd; best = { x: cx, y: cy }; }
+          }
+          e.coverPt = best || { x: e.x, y: e.y };
+        }
+        const cd = dist(e.x, e.y, e.coverPt.x, e.coverPt.y);
+        if (cd > 4){ moveCircle(e, (e.coverPt.x - e.x) / cd * e.spd * dt, (e.coverPt.y - e.y) / cd * e.spd * dt, 14, "g", {}); }
+      } else e.coverPt = null;
+      /* v2.0.15 FLANK, DON'T FUNNEL. Every guard used to run straight at you.
+         Now the SECOND and later attackers pick an offset approach — 90° to
+         the left or right of the line to you, alternating — so a doorway you
+         are holding gets a man coming round the side of it. The first one
+         still comes straight: someone has to. */
+      if (d > 180 && e.repathT <= 0){
+        const attackers = LV.guards.filter(g2 => g2.st === "alert" && !down(g2));
+        const idx = attackers.indexOf(e);
+        let tx = e.target.x, ty = e.target.y;
+        if (idx > 0){
+          const side = (idx % 2 ? 1 : -1), a2 = angTo(e.x, e.y, P.x, P.y) + side * Math.PI / 2;
+          const fx = P.x + Math.cos(a2) * 120, fy = P.y + Math.sin(a2) * 120;
+          if (!solidMove(Math.floor(fx / T), Math.floor(fy / T), "g", { pathing: true })){ tx = fx; ty = fy; }
+        }
+        nearestPathTo(e, Math.floor(tx / T), Math.floor(ty / T), "g"); e.repathT = 0.6;
+      }
       e.repathT -= dt;
-      if (d > 180) walkPath(e, e.spd * 1.5, dt);
+      /* reloading guards do not close — they hold and reload; closing while
+         empty is how AI gets itself killed */
+      if (d > 180 && !(e.reloading > 0)) walkPath(e, e.spd * 1.5, dt);
     } else {
+      e.acqT = 0;                                          // lost you: must re-acquire
       /* lost him: push to last known, then hand over to search */
       const tgt = LV.alert === 2 && LV.lastKnown ? LV.lastKnown : e.target;
       if (tgt){
@@ -1048,11 +1123,28 @@ function dogUpdate(e, dt){
   const d = dist(e.x, e.y, P.x, P.y);
   /* scent: through walls, defeated only by stillness+crouch */
   const treats = hasGear(6) ? 0.5 : 1;              // K9 TREATS: the nose doubts itself
+  /* v2.0.18 THE NOSE FOLLOWS TRACKS. Wet-feet track noises (v2.0.2) and
+     breath noises (v2.0.3) are SCENT to a dog: within 260px of one it locks
+     to that spot and follows the chain, which is a K9 doing what a K9 does —
+     and the counter is the same as real life: dry your feet, catch your
+     breath, break the trail. Sprint away from a dog and you FEED it. */
+  let scent = null;
+  for (const nz of LV.noises){
+    if ((nz.kind === "track" || nz.kind === "breath") && dist(e.x, e.y, nz.x, nz.y) < 260){ scent = nz; break; }
+  }
   if (!P.dead && d < 150){
     const still = P.sneak && !P.moving;
     e.detect = Math.min(1, e.detect + dt * (still ? 0.1 : 0.5) * treats);
   } else if (seesPlayer(e, 230, 0.9, true) > 0){ e.detect = Math.min(1, e.detect + dt * 2.4 * treats); }
+  else if (scent){
+    e.detect = Math.min(1, e.detect + dt * 0.9 * treats);
+    if (e.st !== "alert" && !e.path){ nearestPathTo(e, Math.floor(scent.x / T), Math.floor(scent.y / T), "d"); e.st = "track"; }
+  }
   else e.detect = Math.max(0, e.detect - dt * 0.4);
+  if (e.st === "track"){
+    if (walkPath(e, e.spd || 120, dt) || !scent) e.st = e.detect > 0.2 ? "track" : "patrol";
+    if (!scent && e.detect < 0.2){ e.st = "patrol"; e.path = null; }
+  }
   if (e.detect >= 1 && e.st !== "alert"){
     e.st = "alert";
     if (!e.barked){ e.barked = true; SFX.spot(); addNoise(e.x, e.y, 220, "bark"); toast("the K9 has your scent", "#ff8f8f"); }
@@ -1114,11 +1206,33 @@ function civUpdate(e, dt){
       e.freeze = 8; return;
     }
     if (e.st !== "panic"){
-      e.st = "panic"; SFX.susp();
+      /* v2.0.19 NOT EVERY ANALYST IS A HERO. They all sprinted for the alarm,
+         which made every civilian a timer. Now ~40% (seeded per analyst, so
+         the same one always reacts the same way — learnable) FREEZE and cower
+         where they stand instead: hands up, no alarm, but they SAW you and
+         will tell the first guard who asks (a fresh sighting, 6s later, if a
+         guard walks within 90px). Two different threats, two different plays. */
+      const brave = ((e.x * 7 + e.y * 13) % 10) < 6;
       let best = null, bd = 1e9;
-      for (const pn of LV.panels){ const dd = dist(e.x, e.y, pn.x * T, pn.y * T); if (dd < bd){ bd = dd; best = pn; } }
-      e.panicTo = best; e.path = null;
-      toast("an analyst is running for the ALARM", "#ff8f8f");
+      if (brave) for (const pn of LV.panels){ const dd = dist(e.x, e.y, pn.x * T, pn.y * T); if (dd < bd){ bd = dd; best = pn; } }
+      if (best){
+        e.st = "panic"; SFX.susp(); e.panicTo = best; e.path = null;
+        toast("an analyst is running for the ALARM", "#ff8f8f");
+      } else {
+        e.st = "cower"; e.freeze = 99; e.sawAt = { x: P.x, y: P.y, t: LV.time }; SFX.susp();
+        toast("an analyst FROZE — he saw you, and he'll talk", "#ffbe46");
+      }
+    }
+  }
+  /* v2.0.19 (cont) — a cowering witness tells the first guard who passes */
+  if (e.st === "cower" && e.sawAt && !e.told && LV.time - e.sawAt.t > 6){
+    const g2 = LV.guards.find(g3 => !down(g3) && g3.st === "patrol" && dist(g3.x, g3.y, e.x, e.y) < 90);
+    if (g2){
+      e.told = true;
+      g2.st = "susp"; g2.susT = 10; g2.target = { x: e.sawAt.x, y: e.sawAt.y }; g2.path = null; g2.pop = "?"; g2.popT = 1;
+      LV.lastKnown = { x: e.sawAt.x, y: e.sawAt.y };
+      toast('"the analyst says he went THAT way"', "#ffbe46");
+      goCaution(e.sawAt.x, e.sawAt.y, 12);
     }
   }
   if (e.st === "panic"){
@@ -1244,6 +1358,13 @@ function bulletsUpdate(dt){
         if (b.gone) break;
       }
       if (b.fromPlayer){
+        /* v2.0.13 (cont) — a NEAR MISS suppresses: any live guard within 40px
+           of a passing player round takes a second of degraded aim. Applied
+           per-frame so a stream of fire keeps them pinned. */
+        if (!b.sleep) for (const e of LV.guards){
+          if (down(e) || e.st !== "alert") continue;
+          if (dist(b.x, b.y, e.x, e.y) < 40) e.suppT = Math.min(1.4, (e.suppT || 0) + 0.5);
+        }
         for (const e of LV.guards.concat(LV.dogs, LV.civs)){
           if (down(e) || dist(b.x, b.y, e.x, e.y) > (e.r || 13) + 4) continue;
           if (b.sleep){
@@ -1258,7 +1379,17 @@ function bulletsUpdate(dt){
               if (e.kind === "civ"){ LV.stats.civHurt++; toast("you shot an ANALYST. bad optics.", "#ff5b5b"); }
               LV.decals.push({ x: e.x, y: e.y, r: 5, max: 15 + rnd() * 9, col: "rgba(120,20,26,0.5)" });
               if (e.kind !== "dog" && e.kind !== "civ") _dropCard(e);
-            } else { e.stagT = 0.25; SFX.hit(); }
+            } else {
+              e.stagT = 0.25; SFX.hit();
+              /* v2.0.16 WOUNDED GUARDS. A hit that does not kill used to change
+                 nothing about the man. Now under half health he LIMPS (60%
+                 speed), bleeds a trail the player can read, and calls it out —
+                 a wounded guard is slower to flank and louder to find. */
+              if (e.hp < (GK[e.kind] || GK.guard).hp * 0.5 && !e.wounded){
+                e.wounded = true; guardBark(e, "hurt", 2);
+              }
+              if (e.wounded && OPT.gore) LV.decals.push({ x: e.x, y: e.y, r: 2, max: 3 + rnd() * 3, col: "rgba(120,20,26,0.35)" });
+            }
           }
           if (b.pierce > 0){ b.pierce--; } else b.gone = true;
           break;
