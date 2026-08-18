@@ -3,6 +3,18 @@
 Every entry is a shipped, verified change. The top entry MUST match `VERSION` in
 `js/core.js` — the ship gate refuses to deploy if it does not, so nothing ships unnumbered.
 
+## 2.0.61 — UI craft: the layer every player touches every screen
+- **2.0.52** toasts with weight — colour tier as a left bar, danger toasts larger and held 4.5s, slide-in over 120ms; a duplicate of the newest refreshes instead of stacking ("guard woke up" ×4 is gone)
+- **2.0.53** the pause is a command centre — THIS RUN (objective, spotted, alarms, kills, intel, heat, medal pace) while you can still change them, and a CONTROLS card so "what was knock again?" never means quitting
+- **2.0.54** OPTIONS from pause with a way BACK to the paused game — changing sensitivity mid-op no longer aborts the run
+- **2.0.55** objective flash — when the objective text changes the block flashes amber for a second: "your job just changed"
+- **2.0.56** THE WAYPOINT — the objective projected INTO the world: a diamond over the terminal/file/exit with distance, clamped to the screen edge with an arrow when off-screen; fades near it and during a fight. The exit only pulls once it will actually open
+- **2.0.57** reload ring — fills over the 1.1s at the ammo count AND at the reticle, so your eye never leaves the fight
+- **2.0.58** hit marker + kill confirm on the reticle — white flick on a hit, red X that lingers on a kill or a landed dart
+- **2.0.59** WHO SEES YOU — a thin arc per watcher at their bearing relative to your facing, filling with their detection: which direction to break from before the ! lands
+- **2.0.60** low-health vignette — screen edges breathe red on the last heart in time with the audio pulse
+- **2.0.61** WHERE AM I — a quiet strip bottom-centre: floor, mode, depth, aggravation. The name card fades in 1.5s and nothing said which floor you were on after that
+
 ## 2.0.51 — audio: from sounds to a place
 - **2.0.42** THE ROOM — a convolution reverb built from a procedural impulse (decaying noise, darkening over time), sized per district: long and bright for marble and the vault, short and dead for offices, none outdoors. The SFX bus sends to it, so every existing sound gains the room for free
 - **2.0.43** a compressor on master — sixteen guards firing no longer clips into a wall of static; the mix ducks the quiet under the loud instead of distorting

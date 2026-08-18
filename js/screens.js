@@ -1257,8 +1257,40 @@ function drawPause(){
   g.font = "700 13px Verdana"; g.fillStyle = "#7c8ba3";
   g.fillText("OP " + LV.n + " — " + LV.def.name + " · " + fmtTime(LV.time), W / 2, 232);
   g.textAlign = "left";
+  /* v2.0.53 THE PAUSE IS A COMMAND CENTRE. It was three buttons and a void.
+     Now, left of the buttons: the live run — objective, spotted count,
+     alarms, kills, intel, heat, stamina — the same numbers the debrief will
+     score, shown WHILE you can still change them. And the current medal pace.
+     Right: the controls card, so a mid-op "what was knock again?" never
+     means quitting to OPTIONS. */
+  {
+    const s = LV.stats || {}, lx = 90, ly = 290;
+    g.font = "900 11px Arial Black"; g.fillStyle = "#7cf9a5"; g.fillText("THIS RUN", lx, ly);
+    const med = typeof medalFor === "function" ? medalFor(LV.time, LV.def.par) : null;
+    const rows = [
+      ["OBJECTIVE", (LV.def.objText ? LV.def.objText({ hacks: LV.hacks, file: LV.file, cards: LV.cards }) : "").slice(0, 46)],
+      ["SPOTTED", (s.spotted || 0) + "×" + ((s.spotted || 0) === 0 ? "  · GHOST pace" : "")],
+      ["ALARMS", (s.alarms || 0) + "×"], ["KILLS", (s.kills || 0) + ((s.kills || 0) === 0 ? "  · PACIFIST pace" : "")],
+      ["INTEL", (s.intel || 0) + " / " + LV.picks.filter(q => q.k === "intel").length],
+      ["HEAT", "★".repeat(LV.heat | 0) || "clear"],
+      ["PACE", med ? med.name + " · par " + fmtTime(LV.def.par) : "over par"],
+    ];
+    g.font = "700 11px Verdana";
+    rows.forEach(([k, v], i) => { g.fillStyle = "#57717f"; g.fillText(k, lx, ly + 22 + i * 19); g.fillStyle = "#cbd9c9"; g.fillText(v, lx + 84, ly + 22 + i * 19); });
+    const rx = W - 350, ry = 290;
+    g.font = "900 11px Arial Black"; g.fillStyle = "#7cf9a5"; g.fillText("CONTROLS", rx, ry);
+    const ctl = IS_TOUCH
+      ? [["LEFT HALF", "move"], ["RIGHT HALF", "aim"], ["ACT", "use · choke · drag"], ["SNEAK", "toggle crouch"], ["KNOCK", "coin"], ["GEAR", "cycle gadget"], ["USE", "fire gadget"]]
+      : [["WASD", "move"], ["MOUSE", "aim · click fire"], ["SHIFT", "sprint (stamina)"], ["C", "sneak"], ["E", "act · choke · drag · freeze"], ["F", "coin · interrogate"], ["G / V", "gadget cycle / use"], ["Q", "swap gun"], ["TAB", "focus"]];
+    g.font = "700 11px Verdana";
+    ctl.forEach(([k, v], i) => { g.fillStyle = "#ffd27c"; g.fillText(k, rx, ry + 22 + i * 19); g.fillStyle = "#9db4cc"; g.fillText(v, rx + 84, ry + 22 + i * 19); });
+  }
   btn(W / 2 - 130, 290, 260, 50, "▶ RESUME", () => { STATE = "game"; });
   btn(W / 2 - 130, 354, 260, 50, "↻ RESTART OP", () => startLevel(LV.n));
-  btn(W / 2 - 130, 418, 260, 50, "☰ ABORT TO MENU", () => { STATE = "select"; }, { danger: true });
+  /* v2.0.54 OPTIONS FROM PAUSE — with a way BACK to the paused game. Changing
+     sensitivity mid-op used to mean aborting the run. */
+  btn(W / 2 - 130, 418, 260, 50, "⚙ OPTIONS", () => { PAUSE_RET = true; STATE = "options"; });
+  btn(W / 2 - 130, 482, 260, 50, "☰ ABORT TO MENU", () => { STATE = "select"; }, { danger: true });
   dispatchClicks();
 }
+let PAUSE_RET = false;

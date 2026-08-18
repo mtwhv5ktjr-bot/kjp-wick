@@ -147,6 +147,7 @@ function drawOptions(){
   });
 
   btn(70, H - 78, 190, 44, "↺ RESTORE DEFAULTS", () => { OPT = Object.assign({}, OPT_DEF); saveOpt(); applyAudioOpts(); }, { fs: 12 });
-  btn(W - 190, H - 78, 120, 44, "← BACK", () => { STATE = "title"; });
+  /* v2.0.54 — back to the paused game if that is where we came from */
+  btn(W - 190, H - 78, 120, 44, "← BACK", () => { if (typeof PAUSE_RET !== "undefined" && PAUSE_RET && LV){ PAUSE_RET = false; STATE = "pause"; } else STATE = "title"; });
   dispatchClicks();
 }

@@ -1534,6 +1534,19 @@ function brackets(x, y, w2, h2, col, len){
   g.stroke();
 }
 function drawHUD(){
+  drawWaypoint();          // v2.0.56 — world-space, under every HUD element
+  /* v2.0.61 WHERE AM I — a quiet strip bottom-centre with floor and mode
+     (OP 3 · CUBICLE FARM · DEEP COVER D4 · ☠☠ WOUNDED). The name card fades
+     in 1.5s and after that nothing on screen said which floor you were on —
+     which matters when DEEP COVER shuffles them and dailies rotate. */
+  {
+    let tag = "OP " + LV.n + " · " + LV.def.name;
+    if (typeof DEEP !== "undefined" && DEEP.on) tag = "DEEP COVER · D" + DEEP.depth + " · " + LV.def.name;
+    else if (typeof DAILY_RUN !== "undefined" && DAILY_RUN) tag = "DAILY · " + LV.def.name;
+    if (LV.aggName && LV.aggMult > 1) tag += " · " + LV.aggName;
+    g.font = "900 8px Arial Black"; g.fillStyle = "rgba(157,180,204,0.5)"; g.textAlign = "center";
+    g.fillText(tag, W / 2, H - 6); g.textAlign = "left";
+  }
   /* hearts */
   for (let i = 0; i < P.hpMax; i++){
     const x = 26 + i * 27, y = 26;
@@ -1591,6 +1604,34 @@ function drawHUD(){
         g.stroke();
       }
       g.fillStyle = col; g.beginPath(); g.arc(aim.x, aim.y, 1.3, 0, TAU); g.fill();
+      /* v2.0.58 HIT MARKER + KILL CONFIRM — the X on the reticle that every
+         shooter has and this one did not: white flick on a hit, a larger red
+         X that lingers on a kill or a dart landing. Feedback at the point of
+         attention, not in a toast in the corner. */
+      if (P.hitMark > 0){
+        P.hitMark -= 1 / 60;
+        const kill = P.killMark > 0, a2 = kill ? Math.min(1, P.killMark / 0.7) : Math.min(1, P.hitMark / 0.22);
+        const r2 = kill ? 13 : 9;
+        g.strokeStyle = kill ? "rgba(255,90,90," + a2 + ")" : "rgba(255,255,255," + a2 + ")"; g.lineWidth = kill ? 2.4 : 1.6;
+        for (const q of [Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4]){
+          g.beginPath(); g.moveTo(aim.x + Math.cos(q) * 5, aim.y + Math.sin(q) * 5); g.lineTo(aim.x + Math.cos(q) * r2, aim.y + Math.sin(q) * r2); g.stroke();
+        }
+      }
+      if (P.killMark > 0) P.killMark -= 1 / 60;
+    }
+  }
+  /* v2.0.59 WHO SEES YOU — a thin arc at the top of the screen per watcher
+     with eyes on you, at that watcher's bearing, filling as their detection
+     fills. Splinter Cell's "you are being observed" made legible: you know
+     WHICH direction to break from before the ! lands. */
+  if (LV && P && !P.dead){
+    for (const e of LV.guards.concat(LV.cams)){
+      if (down(e) || e.dead) continue;
+      const det = e.detect || 0; if (det < 0.08) continue;
+      const rel = angDiff(P.ang, angTo(P.x, P.y, e.x, e.y));       // bearing relative to KJP's facing
+      const cx = W / 2 + Math.sin(rel) * 200, cy = 96 - Math.cos(rel) * 26;
+      g.strokeStyle = det >= 1 ? "rgba(255,80,80,0.9)" : "rgba(255,200,80," + (0.35 + det * 0.55) + ")"; g.lineWidth = 3;
+      g.beginPath(); g.arc(cx, cy, 14, Math.PI * 1.15, Math.PI * 1.15 + Math.PI * 0.7 * Math.min(1, det)); g.stroke();
     }
   }
 
@@ -1634,7 +1675,15 @@ function drawHUD(){
   const objS = { hacks: LV.hacks, file: LV.file, holdDone: LV.holdDone };
   g.font = "900 10px Arial Black"; g.fillStyle = "#57717f";
   g.fillText("OBJECTIVE" + (Math.sin(performance.now() / 500) > 0 ? " _" : ""), 26, 56);
-  wrapText("▸ " + LV.def.objText(objS), 26, 72, 400, 15, "#d9e8dc");
+  /* v2.0.55 OBJECTIVE FLASH. When the objective TEXT changes (a hack lands,
+     the file is taken), the block flashes amber for a second — the game
+     telling you "your job just changed" instead of trusting you to re-read
+     a paragraph in the corner mid-crawl. */
+  const objTxt = LV.def.objText(objS);
+  if (LV._objTxt !== objTxt){ if (LV._objTxt !== undefined) LV._objFlash = 1.2; LV._objTxt = objTxt; }
+  if (LV._objFlash > 0){ LV._objFlash -= 1 / 60;
+    g.fillStyle = "rgba(255,210,124," + (LV._objFlash * 0.22).toFixed(3) + ")"; g.fillRect(18, 44, 420, 44); }
+  wrapText("▸ " + objTxt, 26, 72, 400, 15, LV._objFlash > 0 ? "#ffd27c" : "#d9e8dc");
   const totalIntel = LV.picks.filter(q => q.k === "intel").length;
   let hy = 108;
   if (totalIntel){
@@ -1665,7 +1714,12 @@ function drawHUD(){
       g.fillStyle = "#ffbe8a"; g.fillText(d.tag, gx + 5, gyy);
       gx += w2 + 4;
     }
+    hy = gyy + 12;
   }
+  /* the toast column starts below wherever the left stack actually ended —
+     the taller v2.0.52 toasts were landing on the GEAR chips when four types
+     were equipped (audit: 24% overlap ×4) */
+  LV._toastY = Math.max(148, hy + 6);
   /* weapon panel */
   const wid = curWid(), w = wSpec(wid);
   g.fillStyle = "rgba(6,11,16,0.78)"; g.fillRect(18, H - 84, 262, 66);
@@ -1686,6 +1740,16 @@ function drawHUD(){
     g.textAlign = "right";
     g.fillText(P.reloadT > 0 ? "──" : String(P.ammoIn[wid] || 0), 240, H - 54);
     g.textAlign = "left";
+    /* v2.0.57 RELOAD RING — a "──" told you a reload was happening, not how
+       long was left. A ring around the ammo count fills over the 1.1s, and
+       the same ring is drawn at the reticle so your eye never leaves the
+       fight to check. */
+    if (P.reloadT > 0){
+      const p = 1 - P.reloadT / 1.1;
+      g.strokeStyle = "rgba(255,210,124,0.85)"; g.lineWidth = 3;
+      g.beginPath(); g.arc(226, H - 61, 15, -Math.PI / 2, -Math.PI / 2 + TAU * p); g.stroke();
+      if (R3D.on){ const aim = r3dAimScreen(); if (aim){ g.beginPath(); g.arc(aim.x, aim.y, 16, -Math.PI / 2, -Math.PI / 2 + TAU * p); g.stroke(); } }
+    }
     g.font = "700 11px Verdana"; g.fillStyle = "#6c8290";
     g.fillText("/" + _reserveFor(wid), 244, H - 54);
     /* magazine pips */
@@ -1735,17 +1799,27 @@ function drawHUD(){
     g.fillStyle = "#7cf9a5"; g.fillText(P.ctx, W / 2, H - 103);
     g.textAlign = "left";
   }
-  /* toasts */
-  let ty = 148;
+  /* toasts.
+     v2.0.52 TOASTS WITH WEIGHT. Every message stacked identically — "picked
+     up darts" looked exactly like "THE DIRECTOR IS ON THIS FLOOR". Now the
+     colour carries the tier (red = danger, amber = warning, green = good,
+     grey = info) as a left bar, danger toasts are larger and hold longer,
+     and each slides in from the left over 120ms instead of popping. */
+  let ty = LV._toastY || 148;
   for (const t of LV.toasts){
     t.t -= 1 / 60;
-    g.globalAlpha = clamp(t.t, 0, 1);
-    g.fillStyle = "rgba(4,8,12,0.6)";
-    g.font = "700 12px Verdana";
+    if (t.age === undefined) t.age = 0; t.age += 1 / 60;
+    const danger = /#ff[0-9a-f]{2}[0-9a-f]{2}$/i.test(t.col) && /5b|4d|6b|8f/.test(t.col);   // the reds
+    const slide = 1 - Math.pow(1 - Math.min(1, t.age / 0.12), 3);            // ease-out
+    const fs = danger ? 13 : 12;
+    g.globalAlpha = clamp(t.t, 0, 1) * slide;
+    g.font = "700 " + fs + "px Verdana";
     const tw = g.measureText(t.msg).width;
-    g.fillRect(22, ty - 12, tw + 10, 17);
-    g.fillStyle = t.col;
-    g.fillText(t.msg, 26, ty); ty += 20; g.globalAlpha = 1;
+    const x0 = 22 - (1 - slide) * 40;
+    g.fillStyle = "rgba(4,8,12,0.68)";
+    g.fillRect(x0, ty - 12, tw + 14, fs + 5);
+    g.fillStyle = t.col; g.fillRect(x0, ty - 12, 3, fs + 5);                 // the tier bar
+    g.fillText(t.msg, x0 + 8, ty); ty += fs + 8; g.globalAlpha = 1;
   }
   LV.toasts = LV.toasts.filter(t => t.t > 0);
 
@@ -1914,7 +1988,49 @@ function drawRadar(){
 function _radarTarget(){
   if (LV.hacks < (LV.def.hacksNeed || 0)){ const t = LV.terms.find(t => !t.done); if (t) return { x: t.x * T + 24, y: t.y * T + 24 }; }
   if (LV.def.fileNeed && !LV.file && LV.files[0]) return { x: LV.files[0].x * T + 24, y: LV.files[0].y * T + 24 };
+  /* v2.0.56 — once the objective is done and the door will actually open,
+     the target is the way OUT (never before: pointing at a locked exit is a lie) */
+  const open = (LV.hacks >= (LV.def.hacksNeed || 0) && (!LV.def.fileNeed || LV.file)) || LV.def.exfil;
+  if (open && LV.exits && LV.exits[0]) return { x: LV.exits[0].x * T + 24, y: LV.exits[0].y * T + 24, exit: true };
   return null;
+}
+/* v2.0.56 THE WAYPOINT — in 3D the objective was a dot on a 200px radar in
+   the corner and nothing else; you steered by minimap like a taxi driver.
+   Now the target is projected INTO the world: a diamond over the terminal /
+   file / exit with the distance under it, clamped to the screen edge with an
+   arrow when it is off-screen. It fades when you are close (you can see the
+   thing) and while a guard is in view (do not clutter a fight). The single
+   biggest wayfinding fix available. */
+function drawWaypoint(){
+  if (!R3D.on || !R3D.cam || !P) return;
+  const t = _radarTarget(); if (!t) return;
+  const d = dist(P.x, P.y, t.x, t.y);
+  if (d < 90) return;
+  const hot = LV.guards.some(e => !down(e) && e.st === "alert" && dist(e.x, e.y, P.x, P.y) < 300);
+  const alpha = hot ? 0.35 : 0.85;
+  const v = new THREE.Vector3(t.x, 30, t.y); v.project(R3D.cam);
+  let sx = (v.x * 0.5 + 0.5) * W, sy = (-v.y * 0.5 + 0.5) * H;
+  const behind = v.z > 1;
+  const off = behind || sx < 40 || sx > W - 40 || sy < 90 || sy > H - 120;
+  if (off){
+    /* clamp to a screen-edge ring, pointing the way */
+    let ang = Math.atan2(sy - H / 2, sx - W / 2); if (behind) ang += Math.PI;
+    sx = W / 2 + Math.cos(ang) * (W / 2 - 60); sy = H / 2 + Math.sin(ang) * (H / 2 - 110);
+    g.save(); g.globalAlpha = alpha; g.translate(sx, sy); g.rotate(ang);
+    g.fillStyle = t.exit ? "#7cf9a5" : "#ffd27c";
+    g.beginPath(); g.moveTo(14, 0); g.lineTo(-6, -8); g.lineTo(-2, 0); g.lineTo(-6, 8); g.closePath(); g.fill();
+    g.restore();
+  } else {
+    const bob = Math.sin(performance.now() / 300) * 3;
+    g.save(); g.globalAlpha = alpha; g.translate(sx, sy - 22 + bob);
+    g.fillStyle = t.exit ? "#7cf9a5" : "#ffd27c"; g.strokeStyle = "rgba(0,0,0,0.6)"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, -9); g.lineTo(7, 0); g.lineTo(0, 9); g.lineTo(-7, 0); g.closePath(); g.fill(); g.stroke();
+    g.restore();
+  }
+  g.globalAlpha = alpha;
+  g.font = "900 10px Arial Black"; g.textAlign = "center"; g.fillStyle = "#e6f1ff";
+  g.fillText((t.exit ? "EXIT · " : "") + Math.round(d / T * 1.2) + "m", sx, sy + (off ? 22 : 8));
+  g.textAlign = "left"; g.globalAlpha = 1;
 }
 function drawTouchUI(){
   if (TOUCH.stick){
@@ -1975,6 +2091,15 @@ function drawPost(){
   /* vignette — softened in 3D: the world already carries fog and real
      shadows, and the heavy 2D-era vignette was eating a third of the
      brightness the tone-mapping pass just bought */
+  /* v2.0.60 LOW-HEALTH VIGNETTE — the screen edges pulse red on the last
+     heart in time with the audio pulse (v2.0.50), so the two senses agree.
+     Not a constant tint: a breathe, which reads as urgent instead of broken. */
+  if (P && !P.dead && STATE === "game" && P.hp <= 1 && P.hpMax > 1){
+    const b = 0.5 + 0.5 * Math.sin(performance.now() / 380);
+    const gr = g.createRadialGradient(W / 2, H / 2, H * 0.42, W / 2, H / 2, H * 0.78);
+    gr.addColorStop(0, "rgba(160,0,10,0)"); gr.addColorStop(1, "rgba(160,0,10," + (0.18 + b * 0.22).toFixed(3) + ")");
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  }
   /* v2.0.21 FLASHED — the whiteout, decaying. Drawn on top of everything so
      the HUD goes too: you genuinely cannot see. */
   if (P && P.flashT > 0 && STATE === "game"){

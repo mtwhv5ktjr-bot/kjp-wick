@@ -106,7 +106,16 @@ function walkPath(e, spd, dt){
   moveCircle(e, Math.cos(a) * spd * dt, Math.sin(a) * spd * dt, e.r, e.kind === "dog" ? "d" : e.kind === "civ" ? "c" : "g");
   return false;
 }
-function toast(msg, col){ LV.toasts.push({ msg, col: col || "#cfe3d2", t: 3 }); if (LV.toasts.length > 4) LV.toasts.shift(); }
+function toast(msg, col){
+  col = col || "#cfe3d2";
+  /* v2.0.52 — danger holds 4.5s, everything else 3; and a duplicate of the
+     newest toast refreshes it instead of stacking ("guard woke up" ×4) */
+  const last = LV.toasts[LV.toasts.length - 1];
+  if (last && last.msg === msg){ last.t = Math.max(last.t, 2.5); return; }
+  const danger = /ff5b5b|ff4d4d|ff6b6b|ff8f8f/i.test(col);
+  LV.toasts.push({ msg, col, t: danger ? 4.5 : 3 });
+  if (LV.toasts.length > 4) LV.toasts.shift();
+}
 
 /* how lit is this point by the level's (surviving) lamps? 0 = pitch black */
 function lightFactorAt(x, y){
@@ -1445,19 +1454,20 @@ function bulletsUpdate(dt){
           if (headshot){ b.dmg *= 2.2; if (!b.sleep && b.dmg > 0) b.dmg = Math.max(b.dmg, e.hp + 0.01); LV.stats.heads = (LV.stats.heads || 0) + 1;
             toast(b.sleep ? "🎯 CLEAN — out cold" : "🎯 HEADSHOT", "#ffd27c"); SFX.headshot(); }
           if (b.sleep){
-            e.sleep = b.sleep; e.detect = 0; e.radioT = -1; e.hits = 0;
+            e.sleep = b.sleep; e.detect = 0; e.radioT = -1; e.hits = 0; P.hitMark = 0.35; P.killMark = 0.7;   // v2.0.58 a dart landing is a confirm too
             SFX.thud(); fxZzz(e.x, e.y); LV.stats.kos++;
             if (e.kind !== "dog" && e.kind !== "civ") _dropCard(e);
           } else {
             e.hp -= b.dmg; fxBlood(e.x, e.y, 5, e.kind === "civ" ? "#c95b5b" : "#a33");
             if (e.hp <= 0){
-              e.dead = true; SFX.thud(); LV.stats.kills++;
+              e.dead = true; SFX.thud(); LV.stats.kills++; P.hitMark = 0.35; P.killMark = 0.7;   // v2.0.58 kill confirm
               heatAdd(e.kind === "civ" ? 2 : 1, e.kind === "civ" ? "you shot a civilian" : "a body with a hole in it");
               if (e.kind === "civ"){ LV.stats.civHurt++; toast("you shot an ANALYST. bad optics.", "#ff5b5b"); }
               LV.decals.push({ x: e.x, y: e.y, r: 5, max: 15 + rnd() * 9, col: "rgba(120,20,26,0.5)" });
               if (e.kind !== "dog" && e.kind !== "civ") _dropCard(e);
             } else {
               e.stagT = 0.25; SFX.hit();
+              P.hitMark = 0.22;                          // v2.0.58 hit marker
               /* v2.0.16 WOUNDED GUARDS. A hit that does not kill used to change
                  nothing about the man. Now under half health he LIMPS (60%
                  speed), bleeds a trail the player can read, and calls it out —
