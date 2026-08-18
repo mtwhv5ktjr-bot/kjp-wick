@@ -3,6 +3,20 @@
 Every entry is a shipped, verified change. The top entry MUST match `VERSION` in
 `js/core.js` — the ship gate refuses to deploy if it does not, so nothing ships unnumbered.
 
+## 2.0.81 — 3D post & combat FX (frame-time is user-to-confirm — see note)
+- **2.0.72** chromatic aberration in the bloom composite, swelling with damage; zero when unhurt so it costs nothing until it means something
+- **2.0.73** per-district lift/gamma/gain grade in the composite (linear-space, richer than the canvas multiply); the 2D drawPost grade is skipped on the GPU path to avoid doubling
+- **2.0.74** film grain in the shader, finer than the canvas pattern; OPTIONS toggle
+- **2.0.75** filmic vignette in the shader; drawPost now splits into grade (GPU or canvas) + overlays (state feedback, always canvas) so neither path drops or doubles an effect
+- **2.0.76** CRT SCANLINES option, off by default
+- **2.0.77** muzzle/impact SPARKS render in 3D from LV.fx (the sim already spawned them; the 3D renderer showed nothing)
+- **2.0.78** ejecting SHELL CASINGS render in 3D as brass flecks
+- **2.0.79** airborne BLOOD renders in 3D — all three from one pooled Points, no per-particle allocation
+- **2.0.80** FOCUS in 3D — the FOV narrows 7° and the camera creeps in while bullet-time is engaged; folded into the one stance-FOV writer so nothing fights over cam.fov, and the stance system now offsets from OPT.fov instead of a hardcoded 62
+- **2.0.81** FILM GRAIN + CRT options rows
+
+Note: this batch is 3D-visual and per-frame cost could not be measured in the throttled test pane (hidden-tab WebGL throttling). Verified: syntax, single-frame render, effect wiring, and that the composite is bit-safe when bloom is off. The I7 governor auto-downscales on any machine that can't hold 60. Two bugs the build caught: a backtick inside a GLSL comment terminated the JS template literal, and my focus-FOV writer would have fought the existing stance-FOV writer — folded into one.
+
 ## 2.0.71 — 3D density: the empty rooms get furnished
 - **2.0.62** ceiling grid — recessed panel beams so the roof is not one flat plane
 - **2.0.63** baseboard trim where floor meets wall, district-coloured, grounding the walls

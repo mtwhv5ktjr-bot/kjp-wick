@@ -29,6 +29,7 @@ const OPT_DEF = {
   sens: 1,            // aim sensitivity multiplier — "super sensitive" is per-machine
   fov: 62,            // 3D camera FOV; wider = more room, more distortion
   shadows: 1, bloom: 1, quality: "auto",   // the governor may step these down
+  crt: 0, grain: 1,                        // v2.0.76/81 — CRT scanlines off by default, film grain on
   music: 1, sfx: 1,
   hints: 1,
   gore: 1
@@ -126,16 +127,21 @@ function drawOptions(){
                       () => { const f=[54,62,70,80]; OPT.fov = f[(f.indexOf(OPT.fov)+1) % f.length]; if (typeof R3D!=="undefined"&&R3D.cam){ R3D.cam.fov=OPT.fov; R3D.cam.updateProjectionMatrix(); } }, "wider shows more room, tighter feels closer"],
     ["SHADOWS",       () => OPT.shadows ? "ON" : "OFF",             () => OPT.shadows = OPT.shadows ? 0 : 1,     "real-time — costs ~1ms; off on phones"],
     ["BLOOM",         () => OPT.bloom ? "ON" : "OFF",               () => OPT.bloom = OPT.bloom ? 0 : 1,         "neon glow — the cyberpunk look"],
+    ["FILM GRAIN",    () => OPT.grain ? "ON" : "OFF",               () => OPT.grain = OPT.grain ? 0 : 1,         "subtle sensor noise over the picture"],
+    ["CRT SCANLINES", () => OPT.crt ? "ON" : "OFF",                 () => OPT.crt = OPT.crt ? 0 : 1,             "retro monitor lines — off by default"],
     ["LARGE TEXT",    () => OPT.bigText ? "ON" : "OFF",             () => OPT.bigText = OPT.bigText ? 0 : 1,     "bigger HUD and subtitles"],
     ["HINTS",         () => OPT.hints ? "ON" : "OFF",               () => OPT.hints = OPT.hints ? 0 : 1,         "contextual coaching in the field"],
     ["BLOOD",         () => OPT.gore ? "ON" : "OFF",                () => OPT.gore = OPT.gore ? 0 : 1,           "hits still register without it"],
     ["MUSIC",         () => OPT.music ? "ON" : "OFF",               () => { OPT.music = OPT.music ? 0 : 1; applyAudioOpts(); }, "three-layer tension score"],
     ["SFX",           () => OPT.sfx ? "ON" : "OFF",                 () => { OPT.sfx = OPT.sfx ? 0 : 1; applyAudioOpts(); },   "everything else you hear"]
   ];
-  const rw = 520, rh = 40;
+  /* v2.0.81 — three columns now: the toggle list grew past what two columns
+     could hold above the bottom buttons (audit: last row landed on RESTORE
+     DEFAULTS). Three columns of 16 rows is 6 rows tall, clear of the buttons. */
+  const rw = 372, rh = 38, cols = 3;
   rows.forEach(([label, val, act, help], i) => {
-    const col = i % 2, row = i / 2 | 0;
-    const x = 70 + col * (rw + 24), y = 268 + row * (rh + 12);
+    const col = i % cols, row = i / cols | 0;
+    const x = 70 + col * (rw + 12), y = 262 + row * (rh + 10);
     const hot = MOUSE.x >= x && MOUSE.x <= x + rw && MOUSE.y >= y && MOUSE.y <= y + rh;
     g.fillStyle = hot ? "rgba(18,38,28,0.9)" : "rgba(9,14,18,0.8)"; g.fillRect(x, y, rw, rh);
     g.strokeStyle = hot ? "#7cf9a5" : "#243040"; g.lineWidth = 1.5; g.strokeRect(x + 1, y + 1, rw - 2, rh - 2);

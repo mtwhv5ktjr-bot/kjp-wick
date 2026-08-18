@@ -107,6 +107,7 @@ function r3dBuildLevel(){
   R3D.ents.clear(); R3D.lights = []; R3D._plight = null;   // removed with the scene above
   R3D_SHOTS.pool = []; R3D_SHOTS.flash = null; R3D_SHOTS.lastN = 0;
   R3D_ATM.rain = null; R3D_ATM.dust = null;     // the Points died with the scene above
+  R3D_FX.pts = null;                            // ditto — rebuilt lazily next fire
   R3D_TORCH.clear();
   /* cone meshes were removed from the scene by the loop above — drop the map
      too, or the next floor reuses meshes that are no longer parented */
@@ -635,6 +636,46 @@ function r3dSyncFurniture(){
   }
 }
 
+/* v2.0.77-79 PARTICLES IN 3D. The sim already spawns LV.fx on every shot —
+   muzzle sparks, ejecting shell casings, blood — and the 2D renderer drew them
+   while the 3D one showed nothing, so a firefight had no debris. This renders
+   the airborne FX as small billboarded quads from a fixed pool (sparks and
+   blood as glowing points, shells as little brass flecks), so the existing
+   spawns light up in 3D for free. Pool, not per-particle allocation: a
+   firefight is exactly when you cannot afford the garbage. */
+const R3D_FX = { pts: null, geo: null, mat: null, max: 240 };
+function r3dSyncFx(){
+  if (!LV.fx) return;
+  if (!R3D_FX.pts){
+    R3D_FX.geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(R3D_FX.max * 3), col = new Float32Array(R3D_FX.max * 3);
+    R3D_FX.geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    R3D_FX.geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    R3D_FX.mat = new THREE.PointsMaterial({ size: 4, vertexColors: true, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true });
+    R3D_FX.mat.userData.shared = false;
+    R3D_FX.pts = new THREE.Points(R3D_FX.geo, R3D_FX.mat);
+    R3D_FX.pts.frustumCulled = false; R3D_FX.pts.renderOrder = 3;
+    R3D.scene.add(R3D_FX.pts);
+  }
+  const pos = R3D_FX.geo.attributes.position.array, col = R3D_FX.geo.attributes.color.array;
+  let n = 0;
+  for (const f of LV.fx){
+    if (n >= R3D_FX.max) break;
+    let c;
+    if (f.kind === "spark") c = [1.0, 0.86, 0.5];
+    else if (f.kind === "shell") c = [0.78, 0.62, 0.24];
+    else if (f.kind === "blood") c = [0.65, 0.12, 0.15];
+    else continue;
+    pos[n * 3] = f.x; pos[n * 3 + 1] = f.kind === "shell" ? 20 : 24; pos[n * 3 + 2] = f.y;
+    col[n * 3] = c[0]; col[n * 3 + 1] = c[1]; col[n * 3 + 2] = c[2];
+    n++;
+  }
+  R3D_FX.geo.setDrawRange(0, n);
+  R3D_FX.geo.attributes.position.needsUpdate = true;
+  R3D_FX.geo.attributes.color.needsUpdate = true;
+}
+
 /* ---------------------------------------------------------- gunfire ------ */
 /* A shooter where you cannot see the shots. LV.bullets and LV.darts were drawn
    by the 2D pass and nothing replaced them, so a firefight was silent flashes
@@ -944,10 +985,17 @@ function r3dCamera(){
      and tightens it, running widens the lens. All smoothed — a camera that
      snaps between stances is worse than one that never moves. */
   const inVent = R3D._inVent;
-  const tgt = inVent ? { up: 30, back: 62, fov: 56 }
-            : P.sneak ? { up: 80, back: 148, fov: 58 }
-            : P.runHeld && P.moving ? { up: 108, back: 184, fov: 67 }
-            : { up: R3D.camHeight, back: R3D.camDist, fov: 62 };
+  /* FOV is relative to the player's chosen OPT.fov (I1), not a hardcoded 62:
+     each stance offsets from it, and v2.0.80 FOCUS narrows it a further 7°.
+     One writer, so the stance/focus/option targets compose instead of three
+     of them fighting over cam.fov each frame. */
+  const baseFov = OPT.fov || 62;
+  const focusNarrow = (typeof focusOn !== "undefined" && focusOn) ? 7 : 0;
+  const tgt = inVent ? { up: 30, back: 62, fov: baseFov - 6 }
+            : P.sneak ? { up: 80, back: 148, fov: baseFov - 4 }
+            : P.runHeld && P.moving ? { up: 108, back: 184, fov: baseFov + 5 }
+            : { up: R3D.camHeight, back: R3D.camDist, fov: baseFov };
+  tgt.fov -= focusNarrow;
   R3D._upS = (R3D._upS || R3D.camHeight) + (tgt.up - (R3D._upS || R3D.camHeight)) * 0.10;
   R3D._backS = (R3D._backS || R3D.camDist) + (tgt.back - (R3D._backS || R3D.camDist)) * 0.10;
   if (Math.abs(cam.fov - tgt.fov) > 0.05){ cam.fov += (tgt.fov - cam.fov) * 0.08; cam.updateProjectionMatrix(); }
@@ -993,6 +1041,9 @@ function r3dCamera(){
     const p = 1 - TD.t / TD.dur;
     dolly = Math.sin(Math.min(1, p * 1.5) * Math.PI) * 46;
   }
+  /* v2.0.80 — FOCUS also creeps the camera in (the FOV narrow is folded into
+     the stance target above; this is the dolly half of the lens move) */
+  if (typeof focusOn !== "undefined" && focusOn) dolly += 14;
   cam.position.set(R3D._cx + Math.cos(R3D._ca) * dolly, up - dolly * 0.25, R3D._cy + Math.sin(R3D._ca) * dolly);
   /* Aim just ahead of and ABOVE him, not 120 units past his feet — that framed
      the floor and pushed KJP into the corner of frame. Chest height keeps him
@@ -1207,6 +1258,7 @@ function r3dFrame(){
   r3dSyncProps();
   r3dSyncDecals();
   r3dSyncShots();
+  r3dSyncFx();
   r3dSyncCones();
   r3dSyncTorches();
   r3dSyncAtmosphere(1 / 60);

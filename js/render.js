@@ -2077,6 +2077,13 @@ function r3dSoftGrade(rgba){
 }
 function drawPost(){
   const th = LV ? themeOf() : THEMES.lobby;
+  /* v2.0.75 — when the 3D bloom composite is running, IT does grade + grain +
+     vignette in the shader (linear-space, per-pixel). Running the canvas
+     versions on top would double them. So on that path drawPost only keeps
+     the effects the shader does NOT do: scanlines and the death/flash/low-hp
+     overlays. */
+  const gpuGrade = R3D.on && OPT.bloom && LV && STATE === "game";
+  if (gpuGrade){ drawPostOverlays(); return; }
   /* per-theme color wash.
      In 3D the darkness comes from real lights and fog, not from a lightmap
      multiply — laying the full grade on top of that darkened the level into
@@ -2088,34 +2095,6 @@ function drawPost(){
   g.globalCompositeOperation = "lighter";
   g.fillStyle = th.gradeHi; g.fillRect(0, 0, W, H);
   g.globalCompositeOperation = "source-over";
-  /* vignette — softened in 3D: the world already carries fog and real
-     shadows, and the heavy 2D-era vignette was eating a third of the
-     brightness the tone-mapping pass just bought */
-  /* v2.0.60 LOW-HEALTH VIGNETTE — the screen edges pulse red on the last
-     heart in time with the audio pulse (v2.0.50), so the two senses agree.
-     Not a constant tint: a breathe, which reads as urgent instead of broken. */
-  if (P && !P.dead && STATE === "game" && P.hp <= 1 && P.hpMax > 1){
-    const b = 0.5 + 0.5 * Math.sin(performance.now() / 380);
-    const gr = g.createRadialGradient(W / 2, H / 2, H * 0.42, W / 2, H / 2, H * 0.78);
-    gr.addColorStop(0, "rgba(160,0,10,0)"); gr.addColorStop(1, "rgba(160,0,10," + (0.18 + b * 0.22).toFixed(3) + ")");
-    g.fillStyle = gr; g.fillRect(0, 0, W, H);
-  }
-  /* v2.0.21 FLASHED — the whiteout, decaying. Drawn on top of everything so
-     the HUD goes too: you genuinely cannot see. */
-  if (P && P.flashT > 0 && STATE === "game"){
-    g.fillStyle = "rgba(255,255,255," + Math.min(1, P.flashT / 2.2 * 1.3).toFixed(3) + ")";
-    g.fillRect(0, 0, W, H);
-  }
-  /* DEATH DRAIN — the frame loses its colour over the beat. Canvas has no
-     desaturate blend, but a grey wash at "saturation" composite is the exact
-     operation: it pulls every pixel toward its own luma. */
-  if (LV && LV.deathBeat > 0 && STATE === "game"){
-    const p = 1 - Math.max(0, LV.deathBeat) / 1.15;
-    g.globalCompositeOperation = "saturation";
-    g.fillStyle = "rgba(128,128,128," + (p * 0.92).toFixed(3) + ")";
-    g.fillRect(0, 0, W, H);
-    g.globalCompositeOperation = "source-over";
-  }
   const vigA = (R3D.on && LV && STATE === "game") ? 0.34 : 0.6;
   const grad = g.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, H * 0.86);
   grad.addColorStop(0, "rgba(0,0,0,0)");
@@ -2149,26 +2128,53 @@ function drawPost(){
     scanPat = g.createPattern(pc, "repeat");
   }
   g.fillStyle = scanPat; g.fillRect(0, 0, W, H);
+  drawPostOverlays();
+}
+/* The overlays that must run on BOTH the GPU-graded path and the canvas path:
+   state feedback (low-hp, flash, death, combat, hurt, focus). These are not
+   grading — they are the game talking to you — so the GPU shader does not do
+   them, and they live here so neither path drops them. */
+function drawPostOverlays(){
+  /* v2.0.60 low-health vignette — breathes red on the last heart */
+  if (P && !P.dead && STATE === "game" && P.hp <= 1 && P.hpMax > 1){
+    const b = 0.5 + 0.5 * Math.sin(performance.now() / 380);
+    const gr = g.createRadialGradient(W / 2, H / 2, H * 0.42, W / 2, H / 2, H * 0.78);
+    gr.addColorStop(0, "rgba(160,0,10,0)"); gr.addColorStop(1, "rgba(160,0,10," + (0.18 + b * 0.22).toFixed(3) + ")");
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  }
+  /* v2.0.21 flashed whiteout */
+  if (P && P.flashT > 0 && STATE === "game"){
+    g.fillStyle = "rgba(255,255,255," + Math.min(1, P.flashT / 2.2 * 1.3).toFixed(3) + ")"; g.fillRect(0, 0, W, H);
+  }
+  /* death drain */
+  if (LV && LV.deathBeat > 0 && STATE === "game"){
+    const p = 1 - Math.max(0, LV.deathBeat) / 1.15;
+    g.globalCompositeOperation = "saturation"; g.fillStyle = "rgba(128,128,128," + (p * 0.92).toFixed(3) + ")"; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "source-over";
+  }
   /* combat pulse frame */
   if (LV && LV.alert === 2){
     const p = 0.5 + Math.sin(performance.now() / 260) * 0.5;
-    g.strokeStyle = `rgba(255,60,60,${0.10 + p * 0.14})`; g.lineWidth = 12;
-    g.strokeRect(6, 6, W - 12, H - 12);
+    g.strokeStyle = `rgba(255,60,60,${0.10 + p * 0.14})`; g.lineWidth = 12; g.strokeRect(6, 6, W - 12, H - 12);
     const rg = g.createRadialGradient(W / 2, H / 2, H * 0.42, W / 2, H / 2, H * 0.8);
     rg.addColorStop(0, "rgba(255,40,40,0)"); rg.addColorStop(1, `rgba(255,40,40,${0.05 + p * 0.05})`);
     g.fillStyle = rg; g.fillRect(0, 0, W, H);
   }
-  if (P && P.hurtT > 0){
-    g.fillStyle = `rgba(200,30,40,${P.hurtT * 0.5})`; g.fillRect(0, 0, W, H);
-  }
-  /* FOCUS grade: the world goes cold and quiet while you think */
+  if (P && P.hurtT > 0){ g.fillStyle = `rgba(200,30,40,${P.hurtT * 0.5})`; g.fillRect(0, 0, W, H); }
+  /* FOCUS grade */
   if (typeof focusOn !== "undefined" && focusOn){
-    g.globalCompositeOperation = "saturation";
-    g.fillStyle = "hsl(0,20%,50%)"; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "saturation"; g.fillStyle = "hsl(0,20%,50%)"; g.fillRect(0, 0, W, H);
     g.globalCompositeOperation = "source-over";
     g.fillStyle = "rgba(90,140,210,0.10)"; g.fillRect(0, 0, W, H);
     const e = g.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.7);
     e.addColorStop(0, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(10,20,40,0.4)");
     g.fillStyle = e; g.fillRect(0, 0, W, H);
+  }
+  /* v2.0.76 CRT SCANLINES stay available on the GPU path too (they are an
+     overlay, not a grade) — only when OPT.crt is on, off by default */
+  if (OPT.crt && R3D.on && OPT.bloom && LV && STATE === "game"){
+    if (!scanPat){ const pc = document.createElement("canvas"); pc.width = 4; pc.height = 3;
+      const pg = pc.getContext("2d"); pg.fillStyle = "rgba(0,0,0,0.08)"; pg.fillRect(0, 2, 4, 1); scanPat = g.createPattern(pc, "repeat"); }
+    g.fillStyle = scanPat; g.fillRect(0, 0, W, H);
   }
 }
