@@ -66,7 +66,11 @@ function _buildDeskInstances(desks){
   const dark = new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.8 });
   const pap = new THREE.MeshStandardMaterial({ color: 0xd8dde4, roughness: 0.95 });
   const mugM = new THREE.MeshStandardMaterial({ color: 0x7a4030, roughness: 0.6 });
-  const scrM = new THREE.MeshStandardMaterial({ color: 0x9adfff, emissive: 0x6ec3ff, emissiveIntensity: 0.9 });
+  /* HDR emissive so the monitors bloom — 1.9 clears the 0.72 threshold with
+     margin; the flicker below rides on top and dips it under for a frame now
+     and then, which is exactly what a CRT-era screen does */
+  const scrM = new THREE.MeshStandardMaterial({ color: 0x9adfff, emissive: 0x6ec3ff, emissiveIntensity: 1.9 });
+  R3DW._scrM = scrM;
   const A = new THREE.Object3D(), B = new THREE.Object3D();
   const parts = {
     top:    { geo: new THREE.BoxGeometry(T - 8, 3.6, T - 12), mat: wood, at: [], shadow: true },
@@ -260,6 +264,15 @@ function r3dSyncDecals(){
 
 /* --------------------------------------------------------------- sync ----- */
 function r3dSyncProps(){
+  /* SCREEN FLICKER — every monitor on the floor shares one material, so one
+     line drives them all: a slow phosphor breathe with an occasional deep dip
+     that drops it below the bloom threshold for a frame. Living electronics,
+     not painted rectangles. */
+  if (R3DW._scrM){
+    const t = performance.now() / 1000;
+    const dip = (Math.sin(t * 17.3) > 0.985) ? 0.55 : 1;
+    R3DW._scrM.emissiveIntensity = (1.75 + Math.sin(t * 2.1) * 0.18) * dip;
+  }
   /* DUCT CUTAWAY — when KJP is crawling a vent, the sections around him go
      translucent so the camera can ride inside the run. From outside they stay
      solid metal; the cutaway is for the crawler, not the room. */

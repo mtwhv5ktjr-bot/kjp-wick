@@ -177,6 +177,18 @@ async function rpcTypesOf(contract, selector, addr){
     return [...new Set(types)];
   }catch(e){ return []; }
 }
+/* parse the range's #wl= fragment ONCE at boot; applyGuns consumes it */
+window.__wlPref = (function(){
+  try{
+    const m = /(?:^|[#&])wl=([A-Za-z0-9_-]+)/.exec(location.hash || "");
+    if (!m) return null;
+    let s = m[1].replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "=";
+    const o = JSON.parse(decodeURIComponent(escape(atob(s))));
+    const rest = (location.hash || "").replace(/^#/, "").split("&").filter(p => p && !/^wl=/.test(p)).join("&");
+    history.replaceState(null, "", location.pathname + location.search + (rest ? "#" + rest : ""));
+    return (o && o.v === 1) ? { g: o.g, gid: o.gid, m: o.m } : null;
+  }catch(e){ return null; }
+})();
 const rpcModsOf = addr => rpcTypesOf(MODS_ADDR, "0x8d56809a", addr);   // modsOfOwner(address)
 const rpcGearOf = addr => rpcTypesOf(GEAR_ADDR, "0xfce8c498", addr);   // gearOfOwner(address)
 function applyGuns(types, addr, watch, quiet, mods, gear){
@@ -189,6 +201,21 @@ function applyGuns(types, addr, watch, quiet, mods, gear){
   walletAddr = watch ? null : addr;
   window.watchAddr = watch ? addr : null;
   const ids = nftWeaponIds(types);
+  /* ARSENAL RANGE handoff: the range (games.wick.pics/range/) hands its build over
+     as #wl= — a PREFERENCE for which gun leads the carry, never a proof. Honoured
+     only if the wallet actually holds that line; consumed once. */
+  try{
+    const pref = window.__wlPref;
+    if (pref && typeof pref.g === "number"){
+      const wid = "n" + (pref.g >= 11 ? pref.g - 10 : pref.g);
+      if (ids.includes(wid)){
+        let c = (PROG.carry || []).filter(q => q !== wid && ids.includes(q));
+        c = [wid].concat(c).slice(0, 2);
+        PROG.carry = c; saveProg();
+      }
+      window.__wlPref = null;
+    }
+  }catch(e){}
   const nGear = window.ownedGearTypes.length;
   const bits = [];
   if (ids.length) bits.push(ids.length + " gun" + (ids.length > 1 ? "s" : ""));

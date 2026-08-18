@@ -117,7 +117,11 @@ function frame(now, syncOnly){
   else if (STATE === "qa") drawQA();
   else if (STATE === "qa100") drawQA100();
 
-  dtAvg = dtAvg * 0.95 + (performance.now() - t0) * 0.05;
+  const frameMs = performance.now() - t0;
+  dtAvg = dtAvg * 0.95 + frameMs * 0.05;
+  /* the governor only ever sees REAL gameplay frames — menus and sync renders
+     would teach it the wrong budget */
+  if (!syncOnly && STATE === "game" && typeof r3dGovern === "function" && R3D.on) r3dGovern(frameMs);
   if (location.search.includes("perf")){
     g.font = "700 11px monospace"; g.fillStyle = "#7cf9a5";
     g.fillText(dtAvg.toFixed(2) + "ms", W - 70, H - 10);

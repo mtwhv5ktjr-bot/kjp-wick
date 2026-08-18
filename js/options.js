@@ -26,6 +26,9 @@ const OPT_DEF = {
   bigText: 0,
   aimAssist: 1,       // gentle magnetism, on by default for pad/touch feel
   focus: 1,           // ASSIST: hold TAB to slow time while you plan
+  sens: 1,            // aim sensitivity multiplier — "super sensitive" is per-machine
+  fov: 62,            // 3D camera FOV; wider = more room, more distortion
+  shadows: 1, bloom: 1, quality: "auto",   // the governor may step these down
   music: 1, sfx: 1,
   hints: 1,
   gore: 1
@@ -115,6 +118,14 @@ function drawOptions(){
     ["SNEAK",         () => OPT.sneakHold ? "HOLD [C]" : "TOGGLE",  () => OPT.sneakHold = OPT.sneakHold ? 0 : 1, "toggle keeps your hand off the key"],
     ["FOCUS ASSIST",  () => OPT.focus ? "ON [TAB]" : "OFF",         () => OPT.focus = OPT.focus ? 0 : 1,        "hold TAB to slow time while you plan"],
     ["AIM ASSIST",    () => OPT.aimAssist ? "ON" : "OFF",           () => OPT.aimAssist = OPT.aimAssist ? 0 : 1, "gentle magnetism toward a target"],
+    /* the two feel dials that differ machine to machine — cycle through named
+       steps so they live in the same click-to-cycle row language as the rest */
+    ["SENSITIVITY",   () => ({0.55:"LOW",0.8:"SOFT",1:"NORMAL",1.3:"HIGH",1.7:"TWITCH"})[OPT.sens] || ("×" + OPT.sens),
+                      () => { const s=[0.55,0.8,1,1.3,1.7]; OPT.sens = s[(s.indexOf(OPT.sens)+1) % s.length]; }, "how fast the aim follows the mouse"],
+    ["CAMERA FOV",    () => OPT.fov + "°",
+                      () => { const f=[54,62,70,80]; OPT.fov = f[(f.indexOf(OPT.fov)+1) % f.length]; if (typeof R3D!=="undefined"&&R3D.cam){ R3D.cam.fov=OPT.fov; R3D.cam.updateProjectionMatrix(); } }, "wider shows more room, tighter feels closer"],
+    ["SHADOWS",       () => OPT.shadows ? "ON" : "OFF",             () => OPT.shadows = OPT.shadows ? 0 : 1,     "real-time — costs ~1ms; off on phones"],
+    ["BLOOM",         () => OPT.bloom ? "ON" : "OFF",               () => OPT.bloom = OPT.bloom ? 0 : 1,         "neon glow — the cyberpunk look"],
     ["LARGE TEXT",    () => OPT.bigText ? "ON" : "OFF",             () => OPT.bigText = OPT.bigText ? 0 : 1,     "bigger HUD and subtitles"],
     ["HINTS",         () => OPT.hints ? "ON" : "OFF",               () => OPT.hints = OPT.hints ? 0 : 1,         "contextual coaching in the field"],
     ["BLOOD",         () => OPT.gore ? "ON" : "OFF",                () => OPT.gore = OPT.gore ? 0 : 1,           "hits still register without it"],

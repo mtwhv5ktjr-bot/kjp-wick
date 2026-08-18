@@ -321,7 +321,9 @@ function playerUpdate(dt){
       const ad = dist(P.x, P.y, aw.x, aw.y);
       if (ad > 70){
         const want = angTo(P.x, P.y, aw.x, aw.y);
-        P.ang += angDiff(P.ang, want) * 0.45;
+        /* OPT.sens scales the easing gain: LOW 0.25, NORMAL 0.45, TWITCH ~0.77 —
+           the same dead radius protects every setting from the whip */
+        P.ang += angDiff(P.ang, want) * Math.min(0.9, 0.45 * (OPT.sens || 1));
       }
     } else {
       P.ang = angTo(P.x, P.y, camX + MOUSE.x, camY + MOUSE.y);

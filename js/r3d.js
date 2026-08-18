@@ -65,7 +65,7 @@ function r3dInit(){
   renderer.toneMappingExposure = 1.55;
 
   const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(62, W / H, 4, 4200);
+  const cam = new THREE.PerspectiveCamera(OPT.fov || 62, W / H, 4, 4200);
 
   R3D.cv = cv3; R3D.renderer = renderer; R3D.scene = scene; R3D.cam = cam;
   R3D.ready = true;
@@ -151,11 +151,14 @@ function r3dBuildLevel(){
   const walls = new THREE.InstancedMesh(wg, wm, Math.max(1, solid.length));
   walls.castShadow = true; walls.receiveShadow = true;
   const m4 = new THREE.Matrix4();
+  R3D.wallIndex = new Map();          // "tx,ty" → instance id, for the occlusion cutaway
   solid.forEach(([x, y], i) => {
     m4.makeTranslation(x * T + T / 2, R3D.wallH / 2, y * T + T / 2);
     walls.setMatrixAt(i, m4);
+    R3D.wallIndex.set(x + "," + y, i);
   });
   walls.instanceMatrix.needsUpdate = true;
+  R3D_OCC.hidden.clear(); R3D_OCC.ghosts = [];   // previous floor's ghosts died with its scene
   S.add(walls); R3D.walls = walls;
 
   /* CEILING. Without it the top of frame is an empty void above the wall line —
@@ -261,7 +264,10 @@ function r3dBuildLevel(){
         const stretch = sc.clone().setX(L.ar && L.ar > 1.4 ? L.ar * 0.9 : 1);
         m4b.compose(new THREE.Vector3(L.x, R3D.wallH - 2.5, L.y), q, stretch);
         tubes.setMatrixAt(i, m4b);
-        tubes.setColorAt(i, new THREE.Color(r3dLightColor(L, th)).multiplyScalar(1.6));
+        /* HDR: >1.0 so the bloom threshold picks the tubes up — neon tubes
+           run 3.2x, plain office panels 1.6x so only the neon actually glows */
+        const isNeon = L.col && /110,235,255|255,96,214/.test(L.col);
+        tubes.setColorAt(i, new THREE.Color(r3dLightColor(L, th)).multiplyScalar(isNeon ? 3.2 : 1.6));
       });
       tubes.instanceMatrix.needsUpdate = true;
       if (tubes.instanceColor) tubes.instanceColor.needsUpdate = true;
@@ -850,7 +856,15 @@ function r3dCamera(){
      tile blocks sight, so the ray stops instantly and the clamp would shove
      the camera back through the metal. The cutaway makes the close camera
      legal there. */
-  const back = inVent ? R3D._backS : Math.max(R3D.camMin, Math.min(R3D._backS, hit - 26));
+  const wantBack = inVent ? R3D._backS : Math.max(R3D.camMin, Math.min(R3D._backS, hit - 26));
+  /* ASYMMETRIC EASE on the pull-in. Snap IN fast when a wall appears behind
+     KJP (the camera must never clip through), but ease OUT slowly when it
+     clears — the old code snapped both ways and every doorway you backed
+     through made the view lurch. In-fast/out-slow is how every third-person
+     camera since Resident Evil 4 has done it. */
+  if (R3D._backCur === undefined) R3D._backCur = wantBack;
+  R3D._backCur += (wantBack - R3D._backCur) * (wantBack < R3D._backCur ? 0.55 : 0.08);
+  const back = R3D._backCur;
   const up = R3D._upS;
 
   /* the shadow frustum rides with KJP, snapped to texel increments — without
@@ -888,6 +902,87 @@ function r3dCamera(){
     cam.position.x += (rnd() - 0.5) * shakeAmp * 1.6;
     cam.position.z += (rnd() - 0.5) * shakeAmp * 1.6;
   }
+}
+
+/* QUALITY GOVERNOR. Measures the REAL frame budget over a rolling window and,
+   if the game cannot hold 60, steps quality down in the order that buys the
+   most milliseconds for the least look: bloom → shadows → pixel ratio. Steps
+   back UP when there is headroom for a sustained stretch, so a one-off GC hitch
+   never permanently degrades a fast machine. One toast per step, so the player
+   is told rather than left wondering why it just looked different.
+   Only when OPT.quality is "auto"; a manual choice is respected absolutely. */
+const R3D_GOV = { hist: [], tier: 0, cool: 0, last: 0 };
+const GOV_TIERS = [
+  { name: "ULTRA",  bloom: 1, shadows: 1, pr: 2   },
+  { name: "HIGH",   bloom: 0, shadows: 1, pr: 2   },
+  { name: "MEDIUM", bloom: 0, shadows: 0, pr: 1.5 },
+  { name: "LOW",    bloom: 0, shadows: 0, pr: 1   },
+];
+function r3dGovern(frameMs){
+  if (OPT.quality !== "auto" || !R3D.renderer) return;
+  const h = R3D_GOV.hist; h.push(frameMs); if (h.length > 90) h.shift();
+  if (h.length < 60) return;
+  R3D_GOV.cool = Math.max(0, R3D_GOV.cool - 1);
+  if (R3D_GOV.cool) return;
+  const sorted = h.slice().sort((a, b) => a - b);
+  const p75 = sorted[(sorted.length * 0.75) | 0];
+  let t = R3D_GOV.tier;
+  if (p75 > 14.5 && t < GOV_TIERS.length - 1) t++;
+  else if (p75 < 7.5 && t > 0) t--;
+  if (t === R3D_GOV.tier) return;
+  R3D_GOV.tier = t; R3D_GOV.cool = 240;      // 4s before it may move again
+  const tier = GOV_TIERS[t];
+  OPT.bloom = tier.bloom; OPT.shadows = tier.shadows;
+  R3D.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, tier.pr));
+  toast("QUALITY " + tier.name + " — auto-tuned to your machine", "#8fc7ff");
+}
+
+/* OCCLUSION CUTAWAY. Even with the pull-in, a pillar or a low wall can sit
+   between the lens and KJP for a frame or two — and losing the player is the
+   worst thing a third-person camera can do. Walls are ONE instanced mesh so
+   they cannot be faded individually; instead the tiles on the camera→player
+   line are found by DDA and their instance matrices are scaled to zero
+   (hidden), while a shared translucent "ghost" box is drawn in their place
+   so the geometry still reads. Cheap: at most a handful of tiles a frame. */
+const R3D_OCC = { hidden: new Map(), ghosts: [], geo: null, mat: null };
+function r3dOcclusion(){
+  if (!R3D.walls || !P) return;
+  const cam = R3D.cam;
+  /* restore everything hidden last frame */
+  const m4 = new THREE.Matrix4();
+  for (const [i, m] of R3D_OCC.hidden){ R3D.walls.setMatrixAt(i, m); }
+  const had = R3D_OCC.hidden.size;
+  R3D_OCC.hidden.clear();
+  for (const gh of R3D_OCC.ghosts) gh.visible = false;
+  /* walk camera → player on the ground plane */
+  const cx = cam.position.x, cz = cam.position.z, dx = P.x - cx, dz = P.y - cz;
+  const len = Math.hypot(dx, dz); if (len < 20) { if (had) R3D.walls.instanceMatrix.needsUpdate = true; return; }
+  const steps = Math.ceil(len / (T * 0.5));
+  const seen = new Set();
+  let gi = 0;
+  for (let s = 1; s < steps; s++){
+    const wx = cx + dx * s / steps, wz = cz + dz * s / steps;
+    const tx = Math.floor(wx / T), ty = Math.floor(wz / T);
+    const key = tx + "," + ty;
+    if (seen.has(key)) continue; seen.add(key);
+    /* only tiles that are actually between us and him, not the one he stands beside */
+    if (dist(wx, wz, P.x, P.y) < T * 0.9) continue;
+    const idx = R3D.wallIndex && R3D.wallIndex.get(key);
+    if (idx === undefined || idx === null) continue;
+    R3D.walls.getMatrixAt(idx, m4);
+    R3D_OCC.hidden.set(idx, m4.clone());
+    R3D.walls.setMatrixAt(idx, new THREE.Matrix4().makeScale(0, 0, 0));
+    /* ghost in its place */
+    if (!R3D_OCC.geo){ R3D_OCC.geo = new THREE.BoxGeometry(T, R3D.wallH, T);
+      R3D_OCC.mat = new THREE.MeshBasicMaterial({ color: 0x8fa3b5, transparent: true, opacity: 0.16, depthWrite: false });
+      R3D_OCC.mat.userData.shared = true; }
+    let gh = R3D_OCC.ghosts[gi];
+    if (!gh){ gh = new THREE.Mesh(R3D_OCC.geo, R3D_OCC.mat); gh.renderOrder = 4; R3D.scene.add(gh); R3D_OCC.ghosts[gi] = gh; }
+    gh.position.set(tx * T + T / 2, R3D.wallH / 2, ty * T + T / 2);
+    gh.visible = true; gi++;
+    if (gi >= 12) break;
+  }
+  if (had || R3D_OCC.hidden.size) R3D.walls.instanceMatrix.needsUpdate = true;
 }
 
 /* WebGL has a hard limit on lights per draw. A floor carries 40-60 fixtures, so
@@ -931,7 +1026,11 @@ function r3dFrame(){
      point while the camera eased. One frame of input latency is the standard
      price every engine pays; a lying crosshair is not. */
   r3dMouseWorld();
-  R3D.renderer.render(R3D.scene, R3D.cam);
+  r3dOcclusion();                    // camera is final — now cut away what hides KJP
+  /* bloom chain when enabled; otherwise the plain direct render, bit-identical
+     to the pre-bloom path */
+  if (!(typeof r3dPostRender === "function" && r3dPostRender()))
+    R3D.renderer.render(R3D.scene, R3D.cam);
   /* …and now it is just pixels in the 2D canvas again, so thermal, cone tints,
      weather, the HUD and the entire post chain run exactly as they always did */
   g.setTransform(1, 0, 0, 1, 0, 0);

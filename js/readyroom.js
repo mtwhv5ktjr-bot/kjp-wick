@@ -32,6 +32,7 @@ const MINT_URL = "https://kjp-game.wick.pics/mint";
    burned, half KJP half WICK. */
 const MARKET_URL = "https://mint.wick.pics/#gear-market";
 const ARSENAL_URL = "https://mint.wick.pics";
+const RANGE_URL = "https://games.wick.pics/range/";   // members-only 3D range · gunsmith · launch pad
 function openShop(url){
   try{
     const w = window.open(url, "_blank", "noopener");
@@ -221,9 +222,12 @@ function drawReadyRoom(){
   /* gold = the paid drop, and it says what is still unowned so the ask is concrete */
   const buyLabel = missing ? "🛒 GET GEAR — " + missing + " MISSING ↗" : "🛒 GEAR MINT ↗";
   const buyHot = btn(216, H - 62, 236, 40, buyLabel, () => openShop(MINT_URL), { fs: 12 });
-  btn(460, H - 62, 200, 40, "🔫 GUNS + MODS ↗", () => openShop(ARSENAL_URL), { fs: 12 });
-  btn(668, H - 62, 120, 40, walletBusy ? "…" : "↻ REFRESH", () => refreshGear(), { fs: 12 });
-  btn(796, H - 62, 130, 40, "ARSENAL", () => { STATE = "arsenal"; }, { fs: 12 });
+  btn(460, H - 62, 176, 40, "🔫 GUNS + MODS ↗", () => openShop(ARSENAL_URL), { fs: 11 });
+  /* the range: the arcade's members-only proving ground + gunsmith. Same guns,
+     live-fire in 3D; the build you set there arrives here as #wl= */
+  btn(644, H - 62, 128, 40, "🎯 RANGE ↗", () => openShop(RANGE_URL), { fs: 11 });
+  btn(780, H - 62, 104, 40, walletBusy ? "…" : "↻ REFRESH", () => refreshGear(), { fs: 11 });
+  btn(892, H - 62, 110, 40, "ARSENAL", () => { STATE = "arsenal"; }, { fs: 11 });
   btn(W - 190, H - 62, 120, 40, "← BACK", () => { STATE = "title"; });
   /* one line of plain economics under the buy button — and the wallet line
      lives up by the title, where it cannot collide with it */
