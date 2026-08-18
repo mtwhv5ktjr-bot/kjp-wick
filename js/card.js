@@ -107,7 +107,7 @@ function drawScoreCard(r, n, mode){
   } catch(e){}
 
   g.font = "900 15px Arial Black"; g.fillStyle = "#ff9d5b";
-  g.fillText("kjp-game.wick.pics", 60, H - 44);
+  g.fillText("kjp-game.wick.pics  ·  v" + VERSION, 60, H - 44);
   g.font = "700 11px Verdana"; g.fillStyle = "#3d4854";
   g.fillText("infiltrate Langley · beat this", 60, H - 24);
 }

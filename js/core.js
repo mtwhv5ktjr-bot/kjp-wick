@@ -1,6 +1,12 @@
 /* KJP core — canvas/input/audio/save/util + SKIN & WEAPON component registries.
    No modules, no build: files share the window scope, load order in index.html. */
 "use strict";
+/* THE VERSION. Bumped on every shipped change — the patch digit for a
+   contained iteration, the minor for a batch that changes how the game feels.
+   Shown on the title screen and stamped on the score card, so a bug report
+   ("it does X on my phone") always arrives with the build it happened on.
+   CHANGELOG.md is the ledger; the QA suite fails if the two disagree. */
+const VERSION = "2.0.0";
 
 /* ---------- canvas ---------- */
 const cv = document.getElementById("cv"), g = cv.getContext("2d");

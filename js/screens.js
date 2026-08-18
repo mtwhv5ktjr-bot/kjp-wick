@@ -208,7 +208,7 @@ function drawTitle(){
   g.fillStyle = "rgba(0,0,0,0.55)"; g.fillRect(0, 0, W, 26); g.fillRect(0, H - 26, W, 26);
   g.font = "700 10px monospace"; g.fillStyle = "#3d5a48";
   g.fillText("CLASSIFIED // KJP-ORIGIN // EYES ONLY", 20, 17);
-  g.textAlign = "right"; g.fillText("kjp-game.wick.pics", W - 20, 17); g.textAlign = "left";
+  g.textAlign = "right"; g.fillText("kjp-game.wick.pics  ·  v" + VERSION, W - 20, 17); g.textAlign = "left";
   /* menu */
   const bx = 74, by = 408, bw = 300, bh = 40, gap = 8;
   /* FIRST RUN IS SACRED. A first-timer used to be greeted by a wallet nag,
