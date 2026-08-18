@@ -703,16 +703,27 @@ function r3dSyncTorches(){
       t = { spot, beam }; R3D_TORCH.set(i, t);
     }
     const hot = e.st === "alert" || e.detect >= 1;
+    /* v2.0.8 TORCH SWEEP. A searching guard used to hold his beam dead
+       ahead like a headlamp; a real searcher SWEEPS. The beam (and its
+       matching floor cone, which reads e.ang) rides a slow sine while
+       susp/search, so you watch the light rake toward you and time your
+       move for the swing-away. Sweep is on the AIM only, never on e.ang
+       itself — the sim's detection cone stays where the AI thinks it is;
+       this is the flashlight in his hand, not his eyes. */
+    const sweeping = e.st === "susp" || e.st === "search" || e.st === "hunt";
+    const sw = sweeping ? Math.sin(performance.now() / 700 + e.x * 0.01) * 0.42 : 0;
+    const aimA = e.ang + sw;
     t.spot.position.set(e.x, 40, e.y);
-    t.spot.target.position.set(e.x + Math.cos(e.ang) * e.range, 12, e.y + Math.sin(e.ang) * e.range);
+    t.spot.target.position.set(e.x + Math.cos(aimA) * e.range, 12, e.y + Math.sin(aimA) * e.range);
     t.spot.target.updateMatrixWorld();
-    t.spot.intensity = hot ? 2.6 : 1.5;
-    t.spot.color.setHex(hot ? 0xffd0c0 : 0xd8e8ff);
+    t.spot.intensity = hot ? 2.6 : sweeping ? 2.0 : 1.5;
+    t.spot.color.setHex(hot ? 0xffd0c0 : sweeping ? 0xfff0d0 : 0xd8e8ff);
+    t.beam.userData.aimA = aimA;
     t.spot.visible = true;
     /* the cone geometry points -Y by default; lay it flat along the facing */
-    const half = e.range / 2;
-    t.beam.position.set(e.x + Math.cos(e.ang) * half, 34, e.y + Math.sin(e.ang) * half);
-    t.beam.rotation.set(Math.PI / 2, 0, -e.ang - Math.PI / 2, "YXZ");
+    const half = e.range / 2, ba = t.beam.userData.aimA !== undefined ? t.beam.userData.aimA : e.ang;
+    t.beam.position.set(e.x + Math.cos(ba) * half, 34, e.y + Math.sin(ba) * half);
+    t.beam.rotation.set(Math.PI / 2, 0, -ba - Math.PI / 2, "YXZ");
     t.beam.material.opacity = hot ? 0.10 : 0.05;
     t.beam.material.color.setHex(hot ? 0xff8878 : 0xbfd8ff);
     t.beam.visible = true;

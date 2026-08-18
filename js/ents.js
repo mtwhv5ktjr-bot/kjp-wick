@@ -252,6 +252,9 @@ function playerUpdate(dt){
      under the threshold where input feels laggy, over the one where motion
      reads as staccato. The smoothed vector REPLACES the raw one everywhere
      below, so stride, noise and collision all see the same fluid motion. */
+  /* v2.0.10 — during a stagger the player's input barely registers; the shove
+     from the hit is what moves him */
+  if (P.staggerT > 0){ P.staggerT -= dt; mx *= 0.15; my *= 0.15; }
   const accK = 1 - Math.exp(-dt * ((mx || my) ? 14 : 20));
   P.mvx = (P.mvx || 0) + (mx - (P.mvx || 0)) * accK;
   P.mvy = (P.mvy || 0) + (my - (P.mvy || 0)) * accK;
@@ -260,8 +263,30 @@ function playerUpdate(dt){
   const chokeLock = !!P.choke, dragging = !!P.drag;
   const boots = hasGear(3) ? 1.08 : 1;                    // TACTICAL BOOTS
   const armour = hasGear(2) ? 0.93 : 1;                   // KEVLAR: plates cost you 7%
-  let spd = (P.sneak ? 78 : P.runHeld ? 216 : 138) * boots * armour;
-  if (dragging) spd = Math.min(spd, 66);
+  /* v2.0.3 STAMINA. Sprint was free and infinite, so the optimal play was to
+     hold shift forever and the walk speed never mattered. A 4-second tank
+     that refills in ~6 makes the sprint a DECISION — burst to cover, not
+     cruise. Winded (empty) drops you below walk for a beat and breathes
+     audibly, which is a noise: a guard can hear a man out of breath. */
+  if (P.stam === undefined) P.stam = 1;
+  const wantRun = P.runHeld && !P.sneak && P.stam > 0.02;
+  if (wantRun && P.moving) P.stam = Math.max(0, P.stam - dt / 4.0);
+  else if (!dragging) P.stam = Math.min(1, P.stam + dt / (P.stam < 0.05 ? 2.2 : 6.0));
+  /* (dragging drains below, and must not be refilled here in the same frame —
+      the refill at dt/6 was outrunning the drain at dt/9 and the bar never moved) */
+  const winded = P.stam < 0.05 && P.runHeld;
+  if (winded && Math.random() < dt * 2.5) addNoise(P.x, P.y, 40, "breath");
+  const runNow = wantRun && !winded;
+  let spd = (P.sneak ? 78 : runNow ? 216 : winded ? 112 : 138) * boots * armour;
+  P.runFx = runNow;                                       // for the stride/audio, below
+  /* v2.0.7 DRAGGING IS WORK. A body slowed you to 66 flat. Now the drag
+     drains stamina (a man is heavy), and dragging while winded crawls — so
+     you plan the stash BEFORE the takedown, or you get caught in the open
+     with a body and no legs. Boots help; kevlar hurts. */
+  if (dragging){
+    P.stam = Math.max(0, P.stam - dt / 9);
+    spd = Math.min(spd, P.stam < 0.05 ? 34 : 66) * boots;
+  }
   if (chokeLock) spd = 0;
   /* judged on the SMOOTHED vector, or the deceleration tail would be cut off
      the frame the key lifted and the easing would never be seen */
@@ -270,14 +295,26 @@ function playerUpdate(dt){
     P.stride = (P.stride || 0) + spd * dt;
     moveCircle(P, mx * spd * dt, my * spd * dt, 15, "p", { sneak: P.sneak, unlocked: _unlockedDoors() });
     /* footsteps make sound — running is a dinner bell */
-    P.stepT -= dt * (P.runHeld ? 1.7 : 1);
+    P.stepT -= dt * (P.runFx ? 1.7 : 1);
     if (P.stepT <= 0){
       P.stepT = 0.3;
-      SFX.step(P.runHeld, P.sneak);
+      SFX.step(P.runFx, P.sneak);
       const soft = hasGear(3) ? 0.75 : 1;                 // BOOTS: run 25% quieter
       const clank = hasGear(2) ? 1.18 : 1;                // KEVLAR: the plates carry
       const surf = SURF_NOISE[surfaceOf(P.x, P.y)] || 1;  // marble sings, carpet forgives
-      if (!P.sneak) addNoise(P.x, P.y, (P.runHeld ? 165 : 55) * soft * clank * surf, "step");
+      /* v2.0.1 SNEAK IS QUIET, NOT SILENT. A sneaking step used to make zero
+         noise on any surface, which made marble irrelevant the moment you
+         crouched. Now it makes a whisper — 18px on carpet, 24 on marble —
+         small enough that only a dog or a guard already suspicious will catch
+         it, large enough that surface still matters while crouched. */
+      addNoise(P.x, P.y, (P.sneak ? 18 : P.runFx ? 165 : 55) * soft * clank * surf, "step");
+      /* v2.0.2 SURFACE MEMORY. Wet feet track: leaving a wet surface (deck,
+         outdoor rain) leaves footprints on the next few steps that guards
+         can FOLLOW. Purely a noise-echo — a fading noise event dropped behind
+         you — so it rides the existing search AI with no new code path. */
+      const sf = surfaceOf(P.x, P.y);
+      if (sf === "deck" || sf === "grass") P.wetT = 4;
+      else if (P.wetT > 0){ P.wetT -= 0.3; addNoise(P.x, P.y, 26, "track"); }
     }
   }
   /* LAST-RESORT UNSTICK. If the player is somehow inside a tile that is solid
@@ -714,6 +751,18 @@ function playerHit(dmg, fromX, fromY){
   P.hurtT = 0.4; shake(6); SFX.hurt();
   /* which way did that come from — the single most useful combat readout */
   if (fromX != null) P.hurtFrom = { a: angTo(P.x, P.y, fromX, fromY), t: 1.4 };
+  /* v2.0.10 HIT STAGGER. Taking a round used to change a number. Now it
+     KNOCKS: a short shove away from the shooter and a 0.18s stagger where
+     input authority drops — you feel the impact in your hands, and it
+     interrupts a sprint, which is what a bullet does. Not stun-lock: two
+     hits in a row do not chain, the second lands during the first's
+     recovery and only refreshes it. */
+  if (fromX != null){
+    const a = angTo(fromX, fromY, P.x, P.y);
+    P.mvx = (P.mvx || 0) + Math.cos(a) * 0.9; P.mvy = (P.mvy || 0) + Math.sin(a) * 0.9;
+    P.staggerT = Math.max(P.staggerT || 0, 0.18);
+    P.stam = Math.max(0, (P.stam === undefined ? 1 : P.stam) - 0.15);   // the wind goes out of you
+  }
   if (OPT.gore) fxBlood(P.x, P.y, 6, "#7cf9a5");
   if (P.hp <= 0){ P.dead = true; LV.over = "dead"; musicWant("calm"); STING.fail(); }
 }
@@ -755,12 +804,49 @@ function guardUpdate(e, dt){
   /* hearing */
   for (const nz of LV.noises){
     if (!nz.fresh || dist(e.x, e.y, nz.x, nz.y) > nz.r) continue;
+    /* v2.0.5 NOISE MEMORY. Every noise used to be a fresh mystery. Now a
+       guard who has ALREADY checked a spot and found nothing shrugs off the
+       next small noise from the same place ("the building settling") — but
+       the THIRD one in a row is a pattern, and patterns get called in.
+       This is what makes coin-spam stop working and rewards varying your
+       distractions, and it makes guards feel like they remember. */
+    e.heard = e.heard || [];
+    const near = e.heard.find(h => dist(h.x, h.y, nz.x, nz.y) < 90 && LV.time - h.t < 25);
+    const small = nz.kind === "step" || nz.kind === "punch" || nz.kind === "coin" || nz.kind === "track" || nz.kind === "breath";
     if (nz.kind === "gun" || nz.kind === "alarm"){
       e.detect = Math.max(e.detect, 0.8); e.st = "susp"; e.susT = 10; e.target = { x: nz.x, y: nz.y }; e.path = null;
       if (LV.alert === 0) goCaution(nz.x, nz.y, 15);
+    } else if (near && small && near.n === 1 && e.st === "patrol"){
+      near.n++; near.t = LV.time;                 // second small noise from the same spot: shrugged
+      if (e.pop !== "…"){ e.pop = "…"; e.popT = 0.8; }
+    } else if (near && small && near.n >= 2){
+      /* third time is a pattern — go straight to search, and tell the floor */
+      near.n++; near.t = LV.time;
+      e.st = "search"; e.susT = 12; e.detect = Math.max(e.detect, 0.6); e.target = { x: nz.x, y: nz.y }; e.path = null;
+      LV.lastKnown = { x: nz.x, y: nz.y };
+      if (LV.alert === 0) goCaution(nz.x, nz.y, 12);
+      toast('"that\'s three — something is over there"', "#ffbe46");
     } else if (e.st === "patrol" || e.st === "susp"){
+      if (!near) e.heard.push({ x: nz.x, y: nz.y, t: LV.time, n: 1 });
       e.st = "susp"; e.susT = 7; e.target = { x: nz.x, y: nz.y }; e.path = null;
       if (e.pop !== "?"){ e.pop = "?"; e.popT = 1; SFX.susp(); }
+    }
+    if (e.heard.length > 6) e.heard.shift();
+  }
+  /* v2.0.6 (cont) — a patroller under a recently-shot lamp notices the dark */
+  if (e.st === "patrol" && !e.lampChkT){ e.lampChkT = 0.5; }
+  if (e.st === "patrol"){
+    e.lampChkT -= dt;
+    if (e.lampChkT <= 0){
+      e.lampChkT = 0.5;
+      for (const L of LIGHTS){
+        if (!L.dead || !L.shotAt || L.noticed || dist(e.x, e.y, L.x, L.y) > 70) continue;
+        L.noticed = true;
+        e.st = "susp"; e.susT = 9; e.target = { x: L.x, y: L.y }; e.path = null;
+        e.pop = "?"; e.popT = 1; SFX.susp();
+        toast('"…that light was on"', "#ffbe46");
+        break;
+      }
     }
   }
   /* bodies on the floor: the finder stands over it and CALLS IT IN — a radio
@@ -1138,6 +1224,12 @@ function bulletsUpdate(dt){
           L.dead = true; b.gone = true;
           SFX.glass(); fxSpark(L.x, L.y); fxShards(L.x, L.y);
           addNoise(L.x, L.y, b.dart ? 70 : 120, "glass");
+          /* v2.0.6 A DARK LAMP IS EVIDENCE. Shooting out a light used to be
+             free stealth. Now a patrolling guard who walks under a dead
+             fixture NOTICES ("this was on when I passed") and goes suspicious
+             at that spot — so darkening a route buys you time, not immunity,
+             and you learn to shoot the lamps guards do not walk under. */
+          L.shotAt = LV.time;
           break;
         }
         /* cameras too */

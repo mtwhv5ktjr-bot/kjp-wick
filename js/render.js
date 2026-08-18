@@ -1589,6 +1589,18 @@ function drawHUD(){
     }
   }
 
+  /* v2.0.4 STAMINA BAR — under the hearts, only while it is not full: a full
+     bar is silence, a draining one is information. Amber when low, and it
+     pulses when winded so the "why am I slow" question answers itself. */
+  if (P.stam !== undefined && P.stam < 0.995){
+    const bx = 14, by = 44, bw = 3 * 27 - 4, bh = 5;
+    g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(bx, by, bw, bh);
+    const low = P.stam < 0.25;
+    const pulse = low ? 0.6 + 0.4 * Math.sin(performance.now() / 120) : 1;
+    g.fillStyle = low ? "rgba(255,157,91," + pulse + ")" : "rgba(124,249,165,0.85)";
+    g.fillRect(bx, by, bw * P.stam, bh);
+  }
+
   /* SPLIT — the clock against this floor's par, and the gap to your own best.
      `par` has been sitting in levels.js all along driving a silent time bonus;
      nothing ever showed it, so there was nothing to race. The colour is the
@@ -1858,6 +1870,22 @@ function drawRadar(){
     g.fillRect(mx(e.x) - 1.5, my(e.y) - 1.5, 3, 3);
   }
   for (const e of LV.cams) if (!e.dead){ g.fillStyle = "#4c8fe8"; g.fillRect(mx(e.x) - 1.5, my(e.y) - 1.5, 3, 3); }
+  /* v2.0.9 THE GHOST — where THEY think you are. LV.lastKnown is the single
+     most important fact in a search and it was invisible: you could not tell
+     if the guards were converging on your real position or on the corner
+     you left twenty seconds ago. A pulsing outline of KJP at lastKnown makes
+     "they lost me" and "they are RIGHT" instantly readable — the difference
+     between sprinting for the door and freezing in place. Fades as the
+     search does. */
+  if (LV.lastKnown && LV.alert > 0){
+    const gx = mx(LV.lastKnown.x), gy = my(LV.lastKnown.y);
+    const pr = (performance.now() / 1100) % 1;
+    g.strokeStyle = "rgba(255,120,120," + (0.75 - pr * 0.6).toFixed(2) + ")"; g.lineWidth = 1.2;
+    g.beginPath(); g.arc(gx, gy, 3.5, 0, TAU); g.stroke();
+    g.beginPath(); g.arc(gx, gy, 3.5 + pr * 7, 0, TAU); g.stroke();
+    g.font = "900 8px Arial"; g.fillStyle = "rgba(255,140,140,0.8)"; g.textAlign = "center";
+    g.fillText("LAST SEEN", gx, gy - 7); g.textAlign = "left";
+  }
   const tgt = _radarTarget();
   if (tgt){
     const pr = (performance.now() / 900) % 1;
