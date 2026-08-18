@@ -44,6 +44,15 @@ function gameUpdate(dt){
   if (LV.over){
     if (LV.over === "win"){ finishLevel(); }
     else if (LV.over === "dead"){
+      /* DEATH BEAT. The cut to the death screen used to be instant — the most
+         consequential moment in the game and it had no weight. Now the sim
+         freezes, the world keeps rendering for a held second while the 3D
+         camera orbits and the frame drains of colour, THEN the screen. The
+         timer lives here (not in gameUpdate) because gameUpdate must not
+         advance during it — nothing moves in a death beat. */
+      if (!LV.deathBeat){ LV.deathBeat = 1.15; LV.over = "dead"; return; }
+      LV.deathBeat -= dt;
+      if (LV.deathBeat > 0){ LV.over = "dead"; return; }
       /* a DEEP COVER death ends the whole run, not just the floor — bank the
          depth and hand back the borrowed difficulty before the death screen */
       if (DEEP.on) DEEP.lastRun = deepEnd();

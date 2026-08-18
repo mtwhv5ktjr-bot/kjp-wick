@@ -103,6 +103,7 @@ function r3dBuildLevel(){
   for (const o of [...S.children]){ o.traverse(kill); S.remove(o); }
   R3D.ents.clear(); R3D.lights = []; R3D._plight = null;   // removed with the scene above
   R3D_SHOTS.pool = []; R3D_SHOTS.flash = null; R3D_SHOTS.lastN = 0;
+  R3D_ATM.rain = null; R3D_ATM.dust = null;     // the Points died with the scene above
   R3D_TORCH.clear();
   /* cone meshes were removed from the scene by the loop above — drop the map
      too, or the next floor reuses meshes that are no longer parented */
@@ -281,6 +282,7 @@ function r3dBuildLevel(){
   if (P){ R3D._cx = P.x - Math.cos(P.ang) * R3D.camDist; R3D._cy = P.y - Math.sin(P.ang) * R3D.camDist; R3D._ca = P.ang; }
   r3dBuildFurniture();
   r3dBuildProps();
+  r3dBuildAtmosphere(th);
   R3D.level = LV.n;
 }
 
@@ -466,6 +468,34 @@ function r3dAnimate(a, ent, moving, aiming, crouchT){
   }
   /* the same two-per-cycle weight transfer the 2D body bob uses */
   a.position.y += moving ? Math.sin(stride / _STEP_CYC * TAU * 2) * 0.9 : 0;
+
+  /* IDLE LIFE — the mannequin killer. A guard standing still used to be a
+     statue; real people never are. Per-actor phase (from position hash) so a
+     row of guards never breathes in unison, which is the uncanny tell.
+     - weight shift: slow hip sway + a counter-lean in the torso
+     - look-around on patrol pauses: the head sweeps, the shoulders follow late
+     - alert crouch: shoulders drop and hunch when hunting — you can read a
+       guard's state from his silhouette before you read his cone
+     Player excluded from the sway (he is the camera's anchor). */
+  if (!moving && !ent.isPlayer){
+    const t = performance.now() / 1000, ph = ((ent.x * 0.013 + ent.y * 0.007) % 6.28);
+    /* the sway lives on `upper`, not the root — put() writes the root's
+       rotation.z every frame for the downed-body pose and would zero it */
+    const sway = Math.sin(t * 0.9 + ph) * 0.028;
+    if (up){
+      up.rotation.z = sway * 1.4;
+      up.position.x = sway * 6;             // the hip shifts under the lean
+      const alertHunch = (ent.st === "alert" || ent.st === "hunt") ? 0.14 : (ent.st === "susp" || ent.st === "search") ? 0.07 : 0;
+      up.rotation.x = (up.rotation.x || 0) * 0.85 + alertHunch * 0.15;
+      /* on a patrol pause (waitT) the head sweeps a slow arc; the torso lags */
+      if (ent.waitT > 0 && ent.st === "patrol"){
+        const look = Math.sin(t * 0.7 + ph) * 0.55;
+        const head = a.getObjectByName("head");
+        if (head) head.rotation.y = look;
+        up.rotation.y = look * 0.25;
+      }
+    }
+  } else if (up){ up.rotation.z *= 0.8; up.rotation.y *= 0.8; up.position.x *= 0.8; }
 }
 
 /* --------------------------------------------------------- furniture ----- */
@@ -773,6 +803,15 @@ function r3dSyncEnts(){
        been fired — permanent shoulder-aim reads stiff on a stealth walk */
     const cls = r3dGunClass(curWid());
     put("P", "player", P.x, P.y, P.ang, false, null, P, P.moving, cls, P.fireT > 0);
+  } else if (P && P.dead && LV && LV.deathBeat > 0){
+    /* THE FALL — the body goes down through the beat, not in a cut: `down`
+       flag lays him flat, and the eased fall reads as collapse */
+    put("P", "player", P.x, P.y, P.ang, true, a => {
+      const p = 1 - Math.max(0, LV.deathBeat) / 1.15;
+      const e = p * p * (3 - 2 * p);
+      a.rotation.z = Math.PI / 2 * 0.92 * e;
+      a.position.y = 6 * e;
+    }, P, false, null, false);
   }
   for (const e of LV.guards) put("g" + LV.guards.indexOf(e), e.kind, e.x, e.y, e.ang, down(e), a => {
     const pulse = a.getObjectByName("pulse");
@@ -789,15 +828,18 @@ function r3dSyncEnts(){
       else if ((e.st === "susp" || e.st === "search") && e.target){ tx = e.target.x; ty = e.target.y; }
       else if (e.st === "hunt" && LV.lastKnown){ tx = LV.lastKnown.x; ty = LV.lastKnown.y; }
       else if (e.st === "heldup" && !P.dead){ tx = P.x; ty = P.y; }
-      let want = 0;
       if (tx !== null){
         /* body faces e.ang; the model's forward is -Z after rotation.y =
            -ang+π/2, so a world-angle offset δ becomes local yaw -δ. The sign
            was verified empirically with getWorldDirection — angle math here
            has bitten twice before. */
-        want = Math.max(-1.1, Math.min(1.1, -angDiff(e.ang, angTo(e.x, e.y, tx, ty))));
+        const want = Math.max(-1.1, Math.min(1.1, -angDiff(e.ang, angTo(e.x, e.y, tx, ty))));
+        head.rotation.y += (want - head.rotation.y) * 0.12;
+      } else if (!(e.waitT > 0 && e.st === "patrol")){
+        /* no target and not on a patrol pause: relax to centre. On a pause the
+           idle look-around in r3dAnimate owns the head — do not fight it. */
+        head.rotation.y *= 0.88;
       }
-      head.rotation.y += (want - head.rotation.y) * 0.12;
     }
     /* held up = hands straight overhead — the universal silhouette, readable
        across the whole room, which is what makes the verb feel earned */
@@ -898,10 +940,91 @@ function r3dCamera(){
   /* look height follows the stance too — a crawl looks along the duct floor */
   R3D._la.set(P.x + Math.cos(aim) * 58, inVent ? 20 : P.sneak ? 36 : 46, P.y + Math.sin(aim) * 58);
   cam.lookAt(R3D._la);
+
+  /* INTRO FLYBY — the establishing shot. During the name card (introT
+     1.5→0) the camera starts high and wide, looking down at the floor KJP
+     is about to work, and swings down into its shoulder position as the card
+     fades. Eased on the card's own clock so any input that skips the card
+     also lands the camera. It reads the room's shape once, which is what
+     stealth needs before the first step; and it is a free cinematic. */
+  if (typeof introT !== "undefined" && introT > 0 && !inVent){
+    const k = Math.min(1, introT / 1.5);           // 1 at start → 0 at settle
+    const e = k * k * (3 - 2 * k);                  // smoothstep
+    const orbit = R3D._ca + Math.PI * 0.55 * e;     // swing around from the side
+    const hi = 96 + e * 240, out = 172 + e * 260;
+    cam.position.set(P.x - Math.cos(orbit) * out, hi, P.y - Math.sin(orbit) * out);
+    R3D._la.set(P.x + Math.cos(aim) * (58 + e * 120), 46 - e * 30, P.y + Math.sin(aim) * (58 + e * 120));
+    cam.lookAt(R3D._la);
+    /* letterbox is drawn by the 2D name-card pass already; the camera is the
+       new part */
+  }
+  /* DEATH ORBIT — the camera slides around and up over the body as the beat
+     runs down, ending nearly overhead. Slow, one direction, no easing games:
+     the stillness IS the effect. */
+  if (LV && LV.deathBeat > 0){
+    const p = 1 - Math.max(0, LV.deathBeat) / 1.15;
+    const orb = R3D._ca + p * 1.9;
+    cam.position.set(P.x - Math.cos(orb) * (150 - p * 60), 100 + p * 150, P.y - Math.sin(orb) * (150 - p * 60));
+    R3D._la.set(P.x, 10, P.y);
+    cam.lookAt(R3D._la);
+  }
   if (shakeT > 0 && OPT.shake){
     cam.position.x += (rnd() - 0.5) * shakeAmp * 1.6;
     cam.position.z += (rnd() - 0.5) * shakeAmp * 1.6;
   }
+}
+
+/* ATMOSPHERE — particles that live IN the world, not on the lens. Outdoor
+   floors get rain that falls between you and the far wall (the 2D streaks
+   stay as the near-lens layer); indoor floors get dust motes drifting through
+   the light shafts, which is what makes a beam of light look like a beam of
+   light. One THREE.Points each, positions advanced on the CPU in a typed
+   array — 1500 points is a rounding error next to a single shadow pass. */
+const R3D_ATM = { rain: null, dust: null, rv: null, dv: null };
+function r3dBuildAtmosphere(th){
+  for (const k of ["rain", "dust"]) if (R3D_ATM[k]){ R3D.scene.remove(R3D_ATM[k]); R3D_ATM[k].geometry.dispose(); R3D_ATM[k].material.dispose(); R3D_ATM[k] = null; }
+  const N = th.outdoor ? 1400 : 700;
+  const pos = new Float32Array(N * 3), vel = new Float32Array(N);
+  const spread = 900;
+  for (let i = 0; i < N; i++){
+    pos[i * 3] = (Math.random() - 0.5) * spread; pos[i * 3 + 1] = Math.random() * R3D.wallH; pos[i * 3 + 2] = (Math.random() - 0.5) * spread;
+    vel[i] = th.outdoor ? 380 + Math.random() * 220 : 2 + Math.random() * 6;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  const mat = th.outdoor
+    ? new THREE.PointsMaterial({ color: 0xa8c8e8, size: 2.2, transparent: true, opacity: 0.55, depthWrite: false, sizeAttenuation: true })
+    : new THREE.PointsMaterial({ color: 0xffe9c0, size: 1.6, transparent: true, opacity: 0.35, depthWrite: false, sizeAttenuation: true, blending: THREE.AdditiveBlending });
+  mat.userData.shared = false;
+  const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 3;
+  R3D.scene.add(pts);
+  R3D_ATM[th.outdoor ? "rain" : "dust"] = pts;
+  R3D_ATM[th.outdoor ? "rv" : "dv"] = vel;
+}
+function r3dSyncAtmosphere(dt){
+  const pts = R3D_ATM.rain || R3D_ATM.dust; if (!pts || !P) return;
+  const isRain = !!R3D_ATM.rain, vel = isRain ? R3D_ATM.rv : R3D_ATM.dv;
+  const a = pts.geometry.attributes.position.array, N = vel.length;
+  const t = performance.now() / 1000;
+  /* the cloud is centred on the player every frame — it FOLLOWS him, so a
+     900-unit box covers wherever the camera can see without simulating the
+     whole floor */
+  pts.position.set(P.x, 0, P.y);
+  for (let i = 0; i < N; i++){
+    let y = a[i * 3 + 1];
+    if (isRain){
+      y -= vel[i] * dt;
+      if (y < 0){ y = R3D.wallH + Math.random() * 20; a[i * 3] = (Math.random() - 0.5) * 900; a[i * 3 + 2] = (Math.random() - 0.5) * 900; }
+    } else {
+      /* motes drift: slow fall, sideways wander, wrap top-to-bottom */
+      y -= vel[i] * dt * 0.6;
+      a[i * 3] += Math.sin(t * 0.7 + i) * 0.35 * dt * 60 * 0.08;
+      a[i * 3 + 2] += Math.cos(t * 0.5 + i * 1.3) * 0.35 * dt * 60 * 0.08;
+      if (y < 2) y = R3D.wallH - 2;
+    }
+    a[i * 3 + 1] = y;
+  }
+  pts.geometry.attributes.position.needsUpdate = true;
 }
 
 /* QUALITY GOVERNOR. Measures the REAL frame budget over a rolling window and,
@@ -1018,6 +1141,7 @@ function r3dFrame(){
   r3dSyncShots();
   r3dSyncCones();
   r3dSyncTorches();
+  r3dSyncAtmosphere(1 / 60);
   r3dPlayerLight();
   r3dCullLights();
   r3dCamera();

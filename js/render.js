@@ -1942,6 +1942,16 @@ function drawPost(){
   /* vignette — softened in 3D: the world already carries fog and real
      shadows, and the heavy 2D-era vignette was eating a third of the
      brightness the tone-mapping pass just bought */
+  /* DEATH DRAIN — the frame loses its colour over the beat. Canvas has no
+     desaturate blend, but a grey wash at "saturation" composite is the exact
+     operation: it pulls every pixel toward its own luma. */
+  if (LV && LV.deathBeat > 0 && STATE === "game"){
+    const p = 1 - Math.max(0, LV.deathBeat) / 1.15;
+    g.globalCompositeOperation = "saturation";
+    g.fillStyle = "rgba(128,128,128," + (p * 0.92).toFixed(3) + ")";
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "source-over";
+  }
   const vigA = (R3D.on && LV && STATE === "game") ? 0.34 : 0.6;
   const grad = g.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, H * 0.86);
   grad.addColorStop(0, "rgba(0,0,0,0)");
