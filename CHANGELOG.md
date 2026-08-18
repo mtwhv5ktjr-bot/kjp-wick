@@ -3,6 +3,19 @@
 Every entry is a shipped, verified change. The top entry MUST match `VERSION` in
 `js/core.js` — the ship gate refuses to deploy if it does not, so nothing ships unnumbered.
 
+## 2.0.71 — 3D density: the empty rooms get furnished
+- **2.0.62** ceiling grid — recessed panel beams so the roof is not one flat plane
+- **2.0.63** baseboard trim where floor meets wall, district-coloured, grounding the walls
+- **2.0.64** tall furniture against walls — filing cabinets (office/archive), lockers (vault), planters (lobby), crates (yard/roof)
+- **2.0.65** planter foliage / accents on the tall pieces so they are not bare boxes
+- **2.0.66** low clutter in the open — a stray chair, a box, sparse
+- **2.0.67** wall signage — small emissive plates, EXIT greens / dept blues / hazard ambers, at wall height
+- **2.0.68** hanging cables from the ceiling in industrial districts (vault/roof/yard)
+- **2.0.69** door FRAMES — a dark jamb (two posts, a lintel) so a doorway reads as a doorway whether the door is there or not; static, never slides
+- **2.0.70** outdoor SKYLINE — a ring of dark building silhouettes with scattered lit windows at the fog boundary, so the fence and roof have a horizon
+- **2.0.71** scene background — the void above the walls is the fog colour (distance dissolves into haze, not a hole); outdoor floors get a sky-violet night
+- All dressing is deterministic per tile, INSTANCED (ten kinds = ten draw calls), and touches NOTHING in the sim — no collision, no LOS
+
 ## 2.0.61 — UI craft: the layer every player touches every screen
 - **2.0.52** toasts with weight — colour tier as a left bar, danger toasts larger and held 4.5s, slide-in over 120ms; a duplicate of the newest refreshes instead of stacking ("guard woke up" ×4 is gone)
 - **2.0.53** the pause is a command centre — THIS RUN (objective, spotted, alarms, kills, intel, heat, medal pace) while you can still change them, and a CONTROLS card so "what was knock again?" never means quitting

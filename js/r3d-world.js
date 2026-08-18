@@ -113,6 +113,130 @@ function _buildDeskInstances(desks){
 }
 
 /* --------------------------------------------------------------- builder -- */
+/* v2.0.62-71 ROOM DRESSING. GTA interiors feel real because they are
+   CLUTTERED; ours were empty rooms with painted floors. This fills the volume
+   with set-dressing that reads as "a place people work" — none of it touches
+   the sim (no collision, no LOS), all of it deterministic per tile (hash), and
+   all of it INSTANCED so ten kinds of clutter cost ten draw calls, not a
+   thousand. The dressing is chosen per district so a marble lobby and a
+   sub-basement vault do not share a look. */
+function _instHelper(S, geo, mat, placements, tag){
+  if (!placements.length) return null;
+  const m = new THREE.InstancedMesh(geo, mat, placements.length);
+  m.castShadow = true; m.receiveShadow = true;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), s = new THREE.Vector3();
+  placements.forEach((p, i) => {
+    q.setFromAxisAngle(up, p.rot || 0);
+    s.set(p.sx || 1, p.sy || 1, p.sz || 1);
+    m4.compose(new THREE.Vector3(p.x, p.y, p.z), q, s);
+    m.setMatrixAt(i, m4);
+  });
+  m.instanceMatrix.needsUpdate = true;
+  m.userData.dress = tag || 1;
+  S.add(m); R3DW.props.push(m);
+  return m;
+}
+/* is a floor tile open and not right under the player spawn */
+function _floorOpen(x, y){ return tileAt(x, y) === "."; }
+function r3dDressRoom(th){
+  const S = R3D.scene, mat = th.mat;
+  const H2 = R3D.wallH;
+  const wallAdj = (x, y) => { for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) if (tileAt(x+dx,y+dy) === "#") return [dx, dy]; return null; };
+
+  /* --- v2.0.62 CEILING GRID: recessed panel lines + the odd vent, so the
+     roof is not one flat plane when you glance up --- */
+  {
+    const beams = [];
+    for (let y = 2; y < LV.h - 2; y += 3) for (let x = 1; x < LV.w - 1; x++){
+      if (tileAt(x, y) !== ".") continue;
+      beams.push({ x: x * T + T / 2, y: H2 - 1, z: y * T + T / 2, sx: T / 6, sy: 1, sz: 1.4 });
+    }
+    _instHelper(S, new THREE.BoxGeometry(6, 1.5, 6), new THREE.MeshStandardMaterial({ color: 0x0d1118, roughness: 1 }), beams, "ceil");
+  }
+
+  /* --- v2.0.63 BASEBOARD / trim where floor meets wall — a low strip that
+     grounds the walls, district-coloured --- */
+  {
+    const trim = [], col = mat === "marble" ? 0x2a2f3a : mat === "metal" ? 0x1a2029 : mat === "concrete" ? 0x2c2c30 : 0x2f2620;
+    for (let y = 1; y < LV.h - 1; y++) for (let x = 1; x < LV.w - 1; x++){
+      if (tileAt(x, y) !== ".") continue;
+      const w = wallAdj(x, y); if (!w) continue;
+      trim.push({ x: x * T + T / 2 + w[0] * (T / 2 - 1), y: 4, z: y * T + T / 2 + w[1] * (T / 2 - 1),
+                  rot: w[0] !== 0 ? Math.PI / 2 : 0, sx: 1, sy: 1, sz: 1 });
+    }
+    _instHelper(S, new THREE.BoxGeometry(T, 8, 2.5), new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 }), trim, "trim");
+  }
+
+  /* --- district-specific clutter: pick a set by material --- */
+  const rnd = (x, y) => hash2(x * 13 + 5, y * 7 + 3);
+  const clutter = [], clutterTall = [];
+  for (let y = 2; y < LV.h - 2; y++) for (let x = 2; x < LV.w - 2; x++){
+    if (tileAt(x, y) !== ".") continue;
+    const w = wallAdj(x, y);
+    const r = rnd(x, y);
+    /* against a wall: taller furniture; in the open: low things, sparse */
+    if (w && r < 0.13){ clutterTall.push({ x: x * T + T / 2 + w[0] * (T / 2 - 8), z: y * T + T / 2 + w[1] * (T / 2 - 8), rot: w[0] !== 0 ? Math.PI / 2 : 0, r }); }
+    else if (!w && r > 0.93){ clutter.push({ x: x * T + T / 2, z: y * T + T / 2, rot: (r - 0.93) * 40, r }); }
+  }
+  /* v2.0.64 TALL FURNITURE against walls — filing cabinets (office/archive),
+     lockers (vault), planters (lobby), crates (yard/roof) */
+  {
+    let geo, col, hgt;
+    if (mat === "marble"){ geo = new THREE.CylinderGeometry(9, 11, 26, 8); col = 0x2f3a2c; hgt = 13; }      // planter
+    else if (mat === "metal"){ geo = new THREE.BoxGeometry(20, 40, 16); col = 0x2a3038; hgt = 20; }          // locker
+    else if (mat === "concrete"){ geo = new THREE.BoxGeometry(24, 24, 24); col = 0x3a3320; hgt = 12; }        // crate
+    else { geo = new THREE.BoxGeometry(18, 34, 22); col = 0x40372a; hgt = 17; }                                // filing cabinet
+    _instHelper(S, geo, new THREE.MeshStandardMaterial({ color: col, roughness: 0.85 }),
+      clutterTall.map(p => ({ x: p.x, y: hgt, z: p.z, rot: p.rot })), "tall");
+    /* v2.0.65 a leafy top on planters / a handle strip on lockers — one more
+       instanced accent so the tall pieces are not bare boxes */
+    if (mat === "marble")
+      _instHelper(S, new THREE.SphereGeometry(12, 8, 6), new THREE.MeshStandardMaterial({ color: 0x3f7a48, roughness: 0.9 }),
+        clutterTall.map(p => ({ x: p.x, y: 30, z: p.z, sy: 0.6 })), "leaf");
+  }
+  /* v2.0.66 LOW CLUTTER in the open — a stray chair, a box, a floor cone */
+  {
+    _instHelper(S, new THREE.BoxGeometry(12, 16, 12), new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.8 }),
+      clutter.map(p => ({ x: p.x, y: 8, z: p.z, rot: p.rot })), "low");
+  }
+
+  /* v2.0.67 WALL SIGNAGE — small emissive plates on walls, district-tinted:
+     EXIT greens, dept blues, hazard ambers. Reads as a working building and
+     gives the eye something at wall height. */
+  {
+    const signs = [], cols = [0x7cf9a5, 0x5ab4ff, 0xffb454];
+    for (let y = 2; y < LV.h - 2; y += 2) for (let x = 2; x < LV.w - 2; x += 2){
+      if (tileAt(x, y) !== "#") continue;
+      const open = [[1,0],[-1,0],[0,1],[0,-1]].find(([dx,dy]) => tileAt(x+dx,y+dy) === ".");
+      if (!open) continue;
+      if (hash2(x * 5, y * 3) > 0.22) continue;
+      const [dx, dy] = open;
+      signs.push({ x: x * T + T / 2 + dx * (T / 2 + 0.5), y: H2 * 0.62, z: y * T + T / 2 + dy * (T / 2 + 0.5),
+                   rot: dx !== 0 ? Math.PI / 2 : 0, col: cols[(x + y) % 3] });
+    }
+    /* group by colour so each colour is one instanced mesh */
+    for (const c of [0x7cf9a5, 0x5ab4ff, 0xffb454]){
+      const grp = signs.filter(s => s.col === c);
+      _instHelper(S, new THREE.PlaneGeometry(16, 8),
+        new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.7, side: THREE.DoubleSide }),
+        grp.map(s => ({ x: s.x, y: s.y, z: s.z, rot: s.rot })), "sign");
+    }
+  }
+
+  /* v2.0.68 HANGING CABLES from the ceiling in industrial districts (vault,
+     roof, yard) — thin dark lines that add vertical detail and read as a
+     building that has guts */
+  if (mat === "metal" || mat === "concrete"){
+    const cables = [];
+    for (let y = 2; y < LV.h - 2; y += 4) for (let x = 2; x < LV.w - 2; x += 5){
+      if (tileAt(x, y) !== ".") continue;
+      if (hash2(x * 7, y) > 0.4) continue;
+      cables.push({ x: x * T + T / 2 + (hash2(x, y) - 0.5) * 20, y: H2 * 0.7, z: y * T + T / 2, sy: 0.5 + hash2(y, x) * 0.4 });
+    }
+    _instHelper(S, new THREE.CylinderGeometry(0.8, 0.8, H2 * 0.6, 5), new THREE.MeshStandardMaterial({ color: 0x0a0d12, roughness: 1 }), cables, "cable");
+  }
+}
+
 function r3dBuildProps(){
   const S = R3D.scene, th = themeOf();
   R3DW.props = []; R3DW.glass = []; R3DW.cams = []; R3DW.chaos = [];
@@ -179,8 +303,12 @@ function r3dBuildProps(){
   }
 
   if (desks.length) _buildDeskInstances(desks);
+  r3dDressRoom(th);        // v2.0.62-71 — fill the empty volume
 
-  /* security cameras — shootable, so they must be visible and aimable */
+  /* ═══ v2.0.62–71 CLUTTER — the "empty rooms" fix ═══
+     Only cover tiles got furniture; every open tile was bare floor and every
+     wall a blank slab. Real interiors are dressed at the WALLS: things stand
+     against
   for (const cm of LV.cams){
     const grp = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(10, 7, 16),

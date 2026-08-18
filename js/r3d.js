@@ -187,6 +187,41 @@ function r3dBuildLevel(){
   const fogBase = new THREE.Color(th.gradeLo ? r3dRgb(th.gradeLo) : 0x0a1018)
     .lerp(new THREE.Color(0x2a1a4a), 0.45);
   S.fog = new THREE.Fog(fogBase, 300, 380 + (1 - (th.ambient || 0.8)) * 1500);
+  /* v2.0.71 SCENE BACKGROUND — the void above the walls was pure black on
+     every floor. Now it is the fog colour, so distance dissolves INTO the
+     room's own haze instead of into a hole; and outdoor floors get a darker
+     sky-violet so the fence and roof read as night sky, not as a missing
+     ceiling. Matched to fog so the far wall and the void are the same tone. */
+  S.background = th.outdoor ? new THREE.Color(0x0a0a18) : fogBase.clone().multiplyScalar(0.7);
+
+  /* v2.0.70 OUTDOOR SKYLINE — the fence and the roof looked out onto nothing.
+     A ring of dark building silhouettes at the fog boundary, instanced,
+     unlit, so those two floors have a horizon. Never indoors. */
+  if (th.outdoor){
+    const fw2 = LV.w * T, fh2 = LV.h * T, cx = fw2 / 2, cz = fh2 / 2, R = Math.max(fw2, fh2) * 0.62;
+    const towers = [];
+    for (let i = 0; i < 26; i++){
+      const a = i / 26 * TAU, r2 = R + (hash2(i * 3, i) - 0.5) * 120;
+      towers.push({ x: cx + Math.cos(a) * r2, z: cz + Math.sin(a) * r2,
+        h: 120 + hash2(i, i * 5) * 340, w: 40 + hash2(i * 2, i) * 60, rot: a });
+    }
+    const tm = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 0x141426 }), towers.length);
+    const m4b = new THREE.Matrix4(), q2 = new THREE.Quaternion(), up2 = new THREE.Vector3(0, 1, 0);
+    towers.forEach((t2, i) => { q2.setFromAxisAngle(up2, t2.rot);
+      m4b.compose(new THREE.Vector3(t2.x, t2.h / 2, t2.z), q2, new THREE.Vector3(t2.w, t2.h, t2.w)); tm.setMatrixAt(i, m4b); });
+    tm.instanceMatrix.needsUpdate = true; S.add(tm);
+    /* scattered lit windows — a few emissive dots on the towers, one more mesh */
+    const wins = [];
+    for (const t2 of towers) for (let k = 0; k < 6; k++){ if (hash2(t2.x + k, t2.z) > 0.5) continue;
+      wins.push({ x: t2.x + Math.cos(t2.rot) * (t2.w / 2 + 1), y: 30 + hash2(t2.x, k) * (t2.h - 40), z: t2.z + Math.sin(t2.rot) * (t2.w / 2 + 1), rot: t2.rot }); }
+    const wm = new THREE.InstancedMesh(new THREE.PlaneGeometry(6, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffd27c, side: THREE.DoubleSide }), Math.max(1, wins.length));
+    const m4c = new THREE.Matrix4(), q3 = new THREE.Quaternion();
+    wins.forEach((w2, i) => { q3.setFromAxisAngle(up2, w2.rot + Math.PI / 2);
+      m4c.compose(new THREE.Vector3(w2.x, w2.y, w2.z), q3, new THREE.Vector3(1, 1, 1)); wm.setMatrixAt(i, m4c); });
+    wm.instanceMatrix.needsUpdate = true; S.add(wm);
+  }
 
   /* Ambient floor of light — raised for the cyberpunk pass, and TINTED: a
      cool violet-blue base is what makes neon accents read as neon instead of
@@ -525,6 +560,19 @@ function r3dBuildFurniture(){
     m.userData.home = { x: d.x * T + T / 2, y: (R3D.wallH - 4) / 2, z: d.y * T + T / 2 };
     m.position.set(m.userData.home.x, m.userData.home.y, m.userData.home.z);
     S.add(m); R3D_FURN.doors.push(m);
+    /* v2.0.69 DOOR FRAMES. Doors slid in a bare hole in the wall, so an open
+       door was a gap and a closed one a floating slab. A dark jamb around the
+       opening — two posts and a lintel — makes the doorway read as a doorway
+       whether the door is there or not. Static, never moves with the slide. */
+    const jambMat = new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: 0.85, metalness: 0.2 });
+    const cx = d.x * T + T / 2, cz = d.y * T + T / 2, wh = R3D.wallH;
+    const lintel = new THREE.Mesh(d.vertical ? new THREE.BoxGeometry(12, 8, T + 4) : new THREE.BoxGeometry(T + 4, 8, 12), jambMat);
+    lintel.position.set(cx, wh - 4, cz); S.add(lintel);   // static — not in the sync list
+    for (const sgn of [-1, 1]){
+      const post = new THREE.Mesh(new THREE.BoxGeometry(d.vertical ? 12 : 6, wh, d.vertical ? 6 : 12), jambMat);
+      post.position.set(cx + (d.vertical ? 0 : sgn * (T / 2)), wh / 2, cz + (d.vertical ? sgn * (T / 2) : 0));
+      S.add(post);
+    }
   }
 
   /* one shape language: everything you can USE stands up off the floor and
