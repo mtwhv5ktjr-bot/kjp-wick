@@ -3,6 +3,18 @@
 Every entry is a shipped, verified change. The top entry MUST match `VERSION` in
 `js/core.js` — the ship gate refuses to deploy if it does not, so nothing ships unnumbered.
 
+## 2.0.51 — audio: from sounds to a place
+- **2.0.42** THE ROOM — a convolution reverb built from a procedural impulse (decaying noise, darkening over time), sized per district: long and bright for marble and the vault, short and dead for offices, none outdoors. The SFX bus sends to it, so every existing sound gains the room for free
+- **2.0.43** a compressor on master — sixteen guards firing no longer clips into a wall of static; the mix ducks the quiet under the loud instead of distorting
+- **2.0.44** the sounds the new sim needed — winded breathing, the last-round click, the flash ring, the boon sting, the headshot ping, the reload rack, the swap
+- **2.0.45** THE PULSE — a fourth music layer: a heartbeat CONTINUOUS with danger (nearest live guard's distance and facing), so tension rises as a patrol walks toward your hiding spot while the state machine still says calm
+- **2.0.46** you can hear them coming — guard footsteps were sim-only; now surface-aware, distance-attenuated steps at their position. Hearing them is the counterpart to them hearing you
+- **2.0.47** their gunfire is positioned — a shot across the atrium is quieter than one at your ear; the reverb tail tells you how far
+- **2.0.48** doors have a voice — hiss+thunk on open, softer on close, at the door, attenuated; and an honest NOISE event, so a door you did not open means someone else did
+- **2.0.49** the Director has a sound — a low two-note drone every 2.4s while hunting with a lead, growing as he closes; silence while he has none. You hear him before you see him
+- **2.0.50** one heart left — the pulse becomes YOUR heartbeat, louder and insistent. Low health felt in the chest, not read off an icon
+- **2.0.51** sidechain duck — music and ambience dip 40% under every bark and swell back, so a line lands over the combat layer
+
 ## 2.0.41 — the campaign and DEEP COVER become a run
 - **2.0.32** DEEP COVER carries — hearts, ammo, gadgets and stamina persist between floors (clamped to the new max). Depth 8 feels like depth 8: you arrive with what you saved
 - **2.0.33** BOONS — every third depth, pick one of three: SECOND WIND, SOFT SOLES, DEEP POCKETS, SUPPLY DROP, NIGHT EYES, IRON LUNGS, GREED (×1.4 score, −1 heart). They stack, they last the run; "how far" becomes "what build"

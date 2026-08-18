@@ -249,7 +249,7 @@ function gadgetUse(){
       n++;
     }
     if (Math.abs(angDiff(P.ang, angTo(P.x, P.y, tx, ty))) < 1.2 && dist(P.x, P.y, tx, ty) < 260) P.flashT = 2.2;
-    SFX.breach(); shake(7); addNoise(tx, ty, 380, "gun");
+    SFX.breach(); SFX.flashRing(); shake(7); addNoise(tx, ty, 380, "gun");
     toast("✴ FLASH — " + n + " blinded" + (P.flashT ? " (you too — LOOK AWAY next time)" : ""), "#ffffff");
   } else if (id === "cutter"){
     /* v2.0.22 WIRE CUTTER. The EMP is loud-ish and temporary; the cutter is

@@ -17,7 +17,46 @@ function audioBuses(){
   BUS.sfx = c.createGain(); BUS.sfx.connect(BUS.master);
   BUS.music = c.createGain(); BUS.music.connect(BUS.master);
   BUS.amb = c.createGain(); BUS.amb.gain.value = 0.5; BUS.amb.connect(BUS.master);
+  /* v2.0.42 THE ROOM. Every sound was dry — a gunshot in a marble atrium
+     sounded like a gunshot in a closet. A convolution reverb built from a
+     procedurally generated impulse (exponentially decaying noise, low-passed
+     over time — the shape of a real room's tail), sized per district in
+     ambStart: long and bright for marble and the vault, short and dead for
+     carpet offices, none outdoors. The SFX bus SENDS to it, so every existing
+     sound gains the room for free. This is the single biggest jump from
+     "sounds" to "a place". */
+  BUS.verb = c.createConvolver();
+  BUS.verbSend = c.createGain(); BUS.verbSend.gain.value = 0.0;
+  BUS.sfx.connect(BUS.verbSend); BUS.verbSend.connect(BUS.verb); BUS.verb.connect(BUS.master);
+  /* v2.0.43 THE COMPRESSOR ON MASTER. Sixteen guards firing at once used to
+     clip into a wall of static; the mix now has a ceiling that ducks the
+     quiet things under the loud ones instead of distorting everything. */
+  BUS.comp = c.createDynamicsCompressor();
+  BUS.comp.threshold.value = -18; BUS.comp.knee.value = 12; BUS.comp.ratio.value = 4;
+  BUS.comp.attack.value = 0.004; BUS.comp.release.value = 0.18;
+  BUS.master.disconnect(); BUS.master.connect(BUS.comp); BUS.comp.connect(c.destination);
   return BUS;
+}
+/* build an impulse response: `sec` long, `bright` = how much high end survives */
+function _impulse(sec, bright){
+  const c = ac(), len = Math.max(1, Math.floor(c.sampleRate * sec)), buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++){
+    const d = buf.getChannelData(ch);
+    let lp = 0;
+    for (let i = 0; i < len; i++){
+      const t = i / len, env2 = Math.pow(1 - t, 2.4);
+      const n = (Math.random() * 2 - 1);
+      /* one-pole low-pass that darkens as the tail runs — the way air eats treble */
+      const k = bright * (1 - t * 0.7);
+      lp += (n - lp) * (0.15 + k * 0.6);
+      d[i] = lp * env2;
+    }
+  }
+  return buf;
+}
+function roomFor(theme){
+  const R = { yard: null, roof: null, lobby: [1.6, 0.9], vault: [2.2, 0.75], office: [0.5, 0.35], archive: [0.9, 0.5] };
+  return R[theme] === undefined ? [0.7, 0.5] : R[theme];
 }
 function applyAudioOpts(){
   if (!BUS.master) return;
@@ -37,6 +76,12 @@ function ambStart(theme){
   ambStop();
   audioBuses();
   const c = AC, out = BUS.amb;
+  /* v2.0.42 — size the room to the district */
+  try {
+    const rm = roomFor(theme);
+    if (rm){ BUS.verb.buffer = _impulse(rm[0], rm[1]); BUS.verbSend.gain.setTargetAtTime(0.28, c.currentTime, 0.1); }
+    else BUS.verbSend.gain.setTargetAtTime(0.0, c.currentTime, 0.1);
+  } catch(e){}
   const beds = {
     yard:    { noise: 900,  nvol: 0.16, drone: 44,  dvol: 0.05, tick: 0 },
     lobby:   { noise: 420,  nvol: 0.08, drone: 58,  dvol: 0.06, tick: 0 },
@@ -177,6 +222,17 @@ function vox(text, x, y, seed, prio){
   try {
     const c = ac(), now = c.currentTime;
     if (now < VOX.busyUntil && (prio || 1) <= VOX.lastPrio) return false;
+    /* v2.0.51 SIDECHAIN DUCK. Music and ambience dip 40% for the length of the
+       bark and swell back — the mixing move every game with dialogue makes,
+       so a line lands even over the combat layer, and the swell-back is
+       itself a small dramatic beat. */
+    if (BUS.music && BUS.amb){
+      const dur = 0.35 + String(text || "").length * 0.045;
+      const mBase = OPT.music ? 1 : 0, aBase = OPT.sfx ? 0.5 : 0;
+      BUS.music.gain.cancelScheduledValues(now); BUS.amb.gain.cancelScheduledValues(now);
+      BUS.music.gain.setTargetAtTime(mBase * 0.6, now, 0.04); BUS.amb.gain.setTargetAtTime(aBase * 0.6, now, 0.04);
+      BUS.music.gain.setTargetAtTime(mBase, now + dur, 0.25);  BUS.amb.gain.setTargetAtTime(aBase, now + dur, 0.25);
+    }
     const ch = _voxChain();
     /* distance attenuation — a bark across the floor is a whisper */
     const d = (typeof P !== "undefined" && P) ? dist(P.x, P.y, x, y) : 0;

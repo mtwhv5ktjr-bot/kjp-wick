@@ -94,6 +94,15 @@ function walkPath(e, spd, dt){
   const a = angTo(e.x, e.y, gx, gy);
   e.ang += angDiff(e.ang, a) * Math.min(1, dt * 10);
   e.stride = (e.stride || 0) + spd * dt;          // drives the walk cycle
+  /* v2.0.46 YOU CAN HEAR THEM COMING. Guard footsteps existed only as sim
+     noise — silent to the player. Now each stride cycle plays a surface-aware
+     step at their position, distance-attenuated, so a patrol rounding a
+     corner announces itself the way it does in every stealth game worth the
+     name. Hearing them is the counterpart to them hearing you. */
+  const cyc = 56.5;
+  if (Math.floor(e.stride / cyc) !== Math.floor((e.stride - spd * dt) / cyc) && typeof sfxAt === "function")
+    sfxAt(e.x, e.y, () => { const s = (typeof STEP_SURF !== "undefined" && STEP_SURF[surfaceOf(e.x, e.y)]) || { vol: 0.03, lp: 900 };
+      hiss(0.04, s.vol * 0.9, s.lp); }, 0.06);
   moveCircle(e, Math.cos(a) * spd * dt, Math.sin(a) * spd * dt, e.r, e.kind === "dog" ? "d" : e.kind === "civ" ? "c" : "g");
   return false;
 }
@@ -294,7 +303,7 @@ function playerUpdate(dt){
   /* (dragging drains below, and must not be refilled here in the same frame —
       the refill at dt/6 was outrunning the drain at dt/9 and the bar never moved) */
   const winded = P.stam < 0.05 && P.runHeld;
-  if (winded && Math.random() < dt * 2.5) addNoise(P.x, P.y, 40, "breath");
+  if (winded && Math.random() < dt * 2.5){ addNoise(P.x, P.y, 40, "breath"); SFX.breath(); }
   const runNow = wantRun && !winded;
   let spd = (P.sneak ? 78 : runNow ? 216 : winded ? 112 : 138) * boots * armour;
   P.runFx = runNow;                                       // for the stride/audio, below
@@ -406,7 +415,7 @@ function playerUpdate(dt){
        you cannot fire — long enough that you commit to a gun for a moment,
        short enough that it never feels like a menu. Bloom resets: a fresh
        gun is a fresh sight picture. */
-    P.fireT = Math.max(P.fireT || 0, 0.32); P.bloom = 0; P.swapT = 0.32;
+    P.fireT = Math.max(P.fireT || 0, 0.32); P.bloom = 0; P.swapT = 0.32; SFX.swap();
   }
   P.swapT = Math.max(0, (P.swapT || 0) - dt);
   for (let i = 0; i < 6; i++) if (PRESS.has("Digit" + (i + 1)) && P.weapons[i]) P.wi = i;
@@ -508,7 +517,7 @@ function _punch(){
 function _fire(wid, wBase){
   const w = wSpec(wid);                            // mods ride NFT guns
   if ((P.ammoIn[wid] || 0) <= 0){
-    if (_reserveFor(wid) > 0){ P.reloadT = 1.1; SFX.reload(); } else SFX.dry();
+    if (_reserveFor(wid) > 0){ P.reloadT = 1.1; SFX.rack(); } else SFX.dry();
     P.fireT = 0.25; return;
   }
   P.fireT = 1 / w.rps; P.ammoIn[wid]--;
@@ -517,7 +526,7 @@ function _fire(wid, wBase){
      cheapest death there is. The final three rounds of a mag click
      differently on the way out — you hear the reload coming without
      looking at a number. */
-  if ((P.ammoIn[wid] | 0) <= 3 && (P.ammoIn[wid] | 0) > 0 && !w.dart) setTimeout(() => SFX.ui2(), 40);
+  if ((P.ammoIn[wid] | 0) <= 3 && (P.ammoIn[wid] | 0) > 0 && !w.dart) setTimeout(() => SFX.lastRound(), 40);
   /* v2.0.25 RECOIL + BLOOM. Every shot was as accurate as the first. Now each
      round adds bloom that decays over ~0.6s, so a controlled cadence stays
      tight and mag-dumping sprays — and the camera KICKS a few degrees per shot
@@ -1007,7 +1016,11 @@ function guardUpdate(e, dt){
           LV.bullets.push({ x: e.x + Math.cos(e.ang) * 18, y: e.y + Math.sin(e.ang) * 18,
             vx: Math.cos(a) * 760, vy: Math.sin(a) * 760, dmg: 0.5, fromPlayer: false, t: 1.2 });
           fxMuzzle(e.x + Math.cos(e.ang) * 20, e.y + Math.sin(e.ang) * 20, e.ang, "#ffd27c", 6);
-          SFX.shot(); addNoise(e.x, e.y, 300, "gun");
+          /* v2.0.47 their gunfire is POSITIONED — a shot from across the atrium
+             is quieter than one at your ear, and the room's reverb tail (v2.0.42)
+             tells you how far. Was full volume from anywhere. */
+          if (typeof sfxAt === "function") sfxAt(e.x, e.y, () => SFX.shot(), 0.08); else SFX.shot();
+          addNoise(e.x, e.y, 300, "gun");
           /* v2.0.14 MAGAZINES. Infinite guard ammo meant a firefight never
              gave you a rhythm. 12 rounds (30 for the smg) then a 1.6s reload
              during which he stops shooting and — new — pulls toward cover.
@@ -1110,6 +1123,16 @@ function guardUpdate(e, dt){
      knows (LV.lastKnown). Before you slip up he has nothing to go on and
      simply walks his route, which is what makes the first mistake matter. */
   else if (e.st === "hunt"){
+    /* v2.0.49 THE DIRECTOR HAS A SOUND. Every 2.4s while hunting with a lead,
+       a low two-note drone at his position — attenuated, so it grows as he
+       closes. You hear him before you see him, which is the whole horror-
+       movie mechanic and the thing that makes a hunter feel like one. Nothing
+       while he has no lead: silence is his patrol. */
+    e.droneT = (e.droneT || 0) - dt;
+    if (LV.lastKnown && e.droneT <= 0){
+      e.droneT = 2.4;
+      if (typeof sfxAt === "function") sfxAt(e.x, e.y, () => { tone(41, 0.9, "sine", 0.22); tone(38.9, 0.9, "sine", 0.16, 0, ac().currentTime + 0.5); }, 0.05);
+    }
     const lead = LV.lastKnown;
     if (lead){
       e.huntT = (e.huntT || 0) - dt;
@@ -1420,7 +1443,7 @@ function bulletsUpdate(dt){
           const dh = dist(b.x, b.y, e.x, e.y);
           const headshot = dh < 5 && e.kind !== "director" && e.kind !== "dog" && !b.pellets;
           if (headshot){ b.dmg *= 2.2; if (!b.sleep && b.dmg > 0) b.dmg = Math.max(b.dmg, e.hp + 0.01); LV.stats.heads = (LV.stats.heads || 0) + 1;
-            toast(b.sleep ? "🎯 CLEAN — out cold" : "🎯 HEADSHOT", "#ffd27c"); SFX.unlock(); }
+            toast(b.sleep ? "🎯 CLEAN — out cold" : "🎯 HEADSHOT", "#ffd27c"); SFX.headshot(); }
           if (b.sleep){
             e.sleep = b.sleep; e.detect = 0; e.radioT = -1; e.hits = 0;
             SFX.thud(); fxZzz(e.x, e.y); LV.stats.kos++;

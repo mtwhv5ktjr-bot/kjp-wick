@@ -204,8 +204,21 @@ function updateDoors(dt, actors){
         }
       } else want = 1;                       // staff badge through everything non-gated
     }
+    const was = d.open;
     d.open += ((want ? 1 : 0) - d.open) * Math.min(1, dt * 7);
     if (d.open < 0.001) d.open = 0;
+    /* v2.0.48 DOORS HAVE A VOICE. A door sliding open or shut was silent —
+       and doors are the single most important sound in a stealth game,
+       because a door you did not open means someone else did. A hiss+thunk
+       at the door's position on each open, a softer one on close, distance-
+       attenuated: you hear a patrol enter the room behind you. It is also
+       an honest NOISE event: doors are loud, and guards hear yours too. */
+    if (was < 0.5 && d.open >= 0.5){
+      if (typeof sfxAt === "function") sfxAt(d.x * T + T / 2, d.y * T + T / 2, () => { hiss(0.14, 0.09, 1600); tone(120, 0.06, "sine", 0.12, -40); }, 0.06);
+      addNoise(d.x * T + T / 2, d.y * T + T / 2, 60, "door");
+    } else if (was >= 0.5 && d.open < 0.5){
+      if (typeof sfxAt === "function") sfxAt(d.x * T + T / 2, d.y * T + T / 2, () => { tone(90, 0.08, "sine", 0.1, -30); }, 0.06);
+    }
   }
 }
 

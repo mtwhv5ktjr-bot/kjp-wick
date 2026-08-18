@@ -112,7 +112,7 @@ function deepBoonOffer(){
 }
 function deepTakeBoon(b){
   DEEP.taken = DEEP.taken || []; DEEP.taken.push(b.k);
-  b.apply(); SFX.unlock();
+  b.apply(); SFX.boon();
   toast("◆ " + b.name + " — " + b.blurb, "#ffd27c");
   DEEP.offer = null; STATE = "game";
 }

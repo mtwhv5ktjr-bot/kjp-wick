@@ -6,7 +6,7 @@
    Shown on the title screen and stamped on the score card, so a bug report
    ("it does X on my phone") always arrives with the build it happened on.
    CHANGELOG.md is the ledger; the QA suite fails if the two disagree. */
-const VERSION = "2.0.41";
+const VERSION = "2.0.51";
 
 /* ---------- canvas ---------- */
 const cv = document.getElementById("cv"), g = cv.getContext("2d");
@@ -210,7 +210,17 @@ const SFX = {
   stamp(){ tone(90, 0.16, "sawtooth", 0.3, -30); hiss(0.1, 0.2, 1200); },
   heli(){ /* looped in music layer during exfil */ },
   ui(){ tone(840, 0.04, "sine", 0.06); },
-  ui2(){ tone(620, 0.05, "sine", 0.06); }
+  ui2(){ tone(620, 0.05, "sine", 0.06); },
+  /* v2.0.44 THE SOUNDS THE NEW SIM NEEDED. Each is a real event that had no
+     voice: winded breathing, the last-round click, the flash ring, a boon
+     sting, the headshot ping, the reload rack, the swap. */
+  breath(){ hiss(0.28, 0.05, 700); hiss(0.22, 0.04, 500, ac().currentTime + 0.32); },
+  lastRound(){ tone(1400, 0.02, "square", 0.05); tone(900, 0.03, "square", 0.05, 0, ac().currentTime + 0.03); },
+  flashRing(){ tone(3200, 1.6, "sine", 0.05, -400); hiss(0.05, 0.3, 8000); },
+  boon(){ [392, 494, 587, 784, 988].forEach((f, i) => tone(f, 0.16, "sine", 0.09, 0, ac().currentTime + i * 0.06)); },
+  headshot(){ tone(1800, 0.06, "sine", 0.1); tone(2400, 0.1, "sine", 0.08, 0, ac().currentTime + 0.05); },
+  rack(){ tone(340, 0.03, "square", 0.08); tone(220, 0.04, "square", 0.08, 0, ac().currentTime + 0.09); hiss(0.04, 0.05, 1800, ac().currentTime + 0.09); },
+  swap(){ hiss(0.06, 0.05, 1200); tone(400, 0.04, "triangle", 0.05, 80); }
 };
 
 /* music: three tension layers crossfaded by global alert state.
@@ -219,7 +229,7 @@ function musicInit(){
   if (MUSIC.mode !== "off") return;
   const c = ac();
   const out = (typeof audioBuses === "function") ? audioBuses().music : c.destination;
-  for (const k of ["calm", "caution", "combat"]){
+  for (const k of ["calm", "caution", "combat", "pulse"]){
     const gn = c.createGain(); gn.gain.value = k === "calm" ? 0.5 : 0; gn.connect(out); MUSIC.gain[k] = gn;
   }
   if (typeof applyAudioOpts === "function") applyAudioOpts();
@@ -257,10 +267,40 @@ function musicTick(){
       n.buffer = b; const gn = c.createGain(); gn.gain.value = 0.16; n.connect(gn).connect(gB); n.start(t); }
     if (s === 0 || s === 6) mtone(gB, 110, 0.14, "sawtooth", 0.16, t);
     if (s === 10) mtone(gB, 103.8, 0.14, "sawtooth", 0.14, t);
+    /* v2.0.45 THE PULSE — a fourth layer under everything: a heartbeat whose
+       volume is CONTINUOUS with danger, not stepped by alert state. It reads
+       the nearest live guard's distance and whether he is looking your way,
+       so tension rises as a patrol walks toward your hiding spot even while
+       the state machine still says "calm". Two soft thumps per bar, low sine,
+       nothing you would call music — the thing you feel in a stealth game
+       before you know why. */
+    const gP = MUSIC.gain.pulse;
+    if (gP && (s === 0 || s === 3)) mtone(gP, s === 0 ? 48 : 44, 0.11, "sine", s === 0 ? 0.9 : 0.6, t);
     MUSIC.next += SPB; MUSIC.step++;
   }
   // crossfade toward wanted mode
   const want = MUSIC.want;
+  /* pulse target from the sim: 0 when nobody is near, up to 0.45 when a guard is
+     close and facing you; combat pins it to 0.5 (the heart is already going) */
+  let pulseT = 0;
+  try {
+    if (typeof LV !== "undefined" && LV && typeof P !== "undefined" && P && !P.dead && (typeof STATE === "undefined" || STATE === "game")){
+      let best = 0;
+      for (const e of LV.guards){
+        if (e.sleep > 0 || e.ko > 0 || e.dead) continue;
+        const d = Math.hypot(e.x - P.x, e.y - P.y);
+        if (d > 420) continue;
+        const facing = Math.abs(angDiff(e.ang, angTo(e.x, e.y, P.x, P.y))) < 1.2 ? 1 : 0.45;
+        best = Math.max(best, (1 - d / 420) * facing);
+      }
+      pulseT = LV.alert === 2 ? 0.5 : best * 0.45;
+      /* v2.0.50 ONE HEART LEFT — the pulse becomes YOUR heartbeat: louder and,
+         via a faster crossfade, more insistent. Low health should be felt in
+         the chest, not read off a heart icon. */
+      if (P.hp <= 1 && P.hpMax > 1) pulseT = Math.max(pulseT, 0.55);
+    }
+  } catch(e){}
+  if (MUSIC.gain.pulse) MUSIC.gain.pulse.gain.value += (pulseT - MUSIC.gain.pulse.gain.value) * 0.05;
   for (const k of ["calm", "caution", "combat"]){
     const gn = MUSIC.gain[k]; if (!gn) continue;
     const target = (k === want) ? (k === "calm" ? 0.5 : k === "caution" ? 0.55 : 0.6) : 0;
