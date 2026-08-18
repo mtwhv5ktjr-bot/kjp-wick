@@ -117,7 +117,8 @@ function seesPlayer(e, range, fov, ignoreLight){
   if (P.dead || P.stashed) return 0;                  // a closed bin has no silhouette
   if (e.flashT > 0) return 0;                         // v2.0.21 flashed: sees nothing
   const d = dist(e.x, e.y, P.x, P.y);
-  const lightMul = ignoreLight ? 1 : (0.62 + 0.5 * (P.litF == null ? 1 : P.litF));
+  const dm = (typeof DEEP !== "undefined" && DEEP.on && DEEP.mods && DEEP.mods.detect) || 1;   // v2.0.33 NIGHT EYES
+  const lightMul = (ignoreLight ? 1 : (0.62 + 0.5 * (P.litF == null ? 1 : P.litF))) * dm;
   const R = range * (skinDef().detectMul || 1) * (P.sneak ? 0.62 : 1) * lightMul * diff().detect;
   if (d > R) return 0;
   if (Math.abs(angDiff(e.ang, angTo(e.x, e.y, P.x, P.y))) > fov / 2) return 0;
@@ -287,7 +288,8 @@ function playerUpdate(dt){
      audibly, which is a noise: a guard can hear a man out of breath. */
   if (P.stam === undefined) P.stam = 1;
   const wantRun = P.runHeld && !P.sneak && P.stam > 0.02;
-  if (wantRun && P.moving) P.stam = Math.max(0, P.stam - dt / 4.0);
+  const lungs = (typeof DEEP !== "undefined" && DEEP.on && DEEP.mods && DEEP.mods.stam) || 1;   // v2.0.33 IRON LUNGS
+  if (wantRun && P.moving) P.stam = Math.max(0, P.stam - dt / 4.0 * lungs);
   else if (!dragging) P.stam = Math.min(1, P.stam + dt / (P.stam < 0.05 ? 2.2 : 6.0));
   /* (dragging drains below, and must not be refilled here in the same frame —
       the refill at dt/6 was outrunning the drain at dt/9 and the bar never moved) */
@@ -324,7 +326,8 @@ function playerUpdate(dt){
          crouched. Now it makes a whisper — 18px on carpet, 24 on marble —
          small enough that only a dog or a guard already suspicious will catch
          it, large enough that surface still matters while crouched. */
-      addNoise(P.x, P.y, (P.sneak ? 18 : P.runFx ? 165 : 55) * soft * clank * surf, "step");
+      const dq = (typeof DEEP !== "undefined" && DEEP.on && DEEP.mods && DEEP.mods.quiet) || 1;   // v2.0.33 SOFT SOLES
+      addNoise(P.x, P.y, (P.sneak ? 18 : P.runFx ? 165 : 55) * soft * clank * surf * dq, "step");
       /* v2.0.2 SURFACE MEMORY. Wet feet track: leaving a wet surface (deck,
          outdoor rain) leaves footprints on the next few steps that guards
          can FOLLOW. Purely a noise-echo — a fading noise event dropped behind

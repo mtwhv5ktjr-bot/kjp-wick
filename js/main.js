@@ -105,7 +105,7 @@ function frame(now, syncOnly){
      own buttons — and missing one would silently leave OPT.diff rewritten to
      whatever today's contract demanded. One catch-all beats four call sites. */
   if (typeof DAILY_RUN !== "undefined" && DAILY_RUN
-      && STATE !== "game" && STATE !== "pause" && STATE !== "debrief" && STATE !== "dead") dailyEnd();
+      && STATE !== "game" && STATE !== "pause" && STATE !== "debrief" && STATE !== "dead" && STATE !== "boon") dailyEnd();
 
   if (STATE === "game"){ if (!syncOnly) gameUpdate(dt); drawGame(); drawIntroCard(); }
   else if (STATE === "pause"){ drawGame(); drawPause(); if (PRESS.has("Escape")) STATE = "game"; }
@@ -116,6 +116,7 @@ function frame(now, syncOnly){
   else if (STATE === "intel") drawIntel();
   else if (STATE === "options") drawOptions();
   else if (STATE === "dossier") drawDossier();
+  else if (STATE === "boon") drawBoon();
   else if (STATE === "blackfile") drawBlackFile();
   else if (STATE === "case") drawCase();
   else if (STATE === "ready") drawReadyRoom();

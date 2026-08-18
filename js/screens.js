@@ -362,6 +362,23 @@ function drawSelect(){
   g.fillText("SELECT OPERATION", 70, 78);
   g.font = "700 12px Verdana"; g.fillStyle = "#7c8ba3";
   g.fillText("clear a mission to open the next · GHOST = never spotted, no alarms · campaign score = sum of best runs", 70, 100);
+  /* v2.0.39 THE DESCENT STRIP — six floors as a vertical section of Langley,
+     lit as you clear them, right-aligned. It says "you are HERE in the
+     building" at a glance, which the grid of cards never did; and the
+     unlit floors below are the pull. */
+  {
+    const sx = W - 96, sy = 60, fh = 14;
+    g.font = "900 8px Arial Black"; g.fillStyle = "#57717f"; g.textAlign = "right";
+    g.fillText("LANGLEY", sx - 2, sy - 4);
+    for (let n = 1; n <= 6; n++){
+      const y = sy + (n - 1) * (fh + 3), done = !!PROG.lv[n], cur = !done && (n === 1 || !!PROG.lv[n - 1]);
+      g.fillStyle = done ? "rgba(124,249,165,0.85)" : cur ? "rgba(255,210,124,0.7)" : "rgba(60,72,84,0.5)";
+      g.fillRect(sx - 68, y, 68, fh);
+      g.fillStyle = done ? "#05070c" : "#9db4cc"; g.font = "900 8px Arial Black";
+      g.fillText(done ? "✓ " + LEVELS[n].name.slice(0, 9) : cur ? "▸ " + LEVELS[n].name.slice(0, 9) : "" + n, sx - 4, y + 10);
+    }
+    g.textAlign = "left";
+  }
   const cw = 356, ch = 190, gx = 70, gy = 130, gapx = 32, gapy = 26;
   for (let i = 1; i <= 6; i++){
     const col = (i - 1) % 3, row = (i - 1) / 3 | 0;
@@ -428,8 +445,27 @@ function startBrief(n){
   BR = { n, lines: LEVELS[n].brief, i: 0, chars: 0, done: false, outro: false };
   STATE = "brief"; SFX.codec();
 }
+/* v2.0.37 THE ENDING KNOWS HOW YOU PLAYED. One fixed outro for a ghost and
+   for someone who set the building on fire is a story that was not
+   listening. The codec now opens with a line about YOUR campaign — kills,
+   alarms, ghosts, the Black File — before the shared ending. Small, but it
+   is the difference between an ending and a cutscene. */
 function startOutro(){
-  BR = { n: 0, lines: OUTRO, i: 0, chars: 0, done: false, outro: true };
+  const lv = PROG.lv || {};
+  let kills = 0, alarms = 0, ghosts = 0, pac = 0;
+  for (let n = 1; n <= 6; n++){ const r = lv[n]; if (!r) continue; kills += r.kills || 0; alarms += r.alarms || 0; if (r.ghost) ghosts++; if (r.pacifist) pac++; }
+  const [bfGot, bfAll] = (typeof bfTotal === "function") ? bfTotal() : [0, 24];
+  let open;
+  if (ghosts >= 5 && pac >= 5) open = { w: "rg", t: "Six floors and they never knew you were IN the building. The Agency's own logs will say nothing happened tonight — which is going to make the evidence bag very hard to explain." };
+  else if (kills >= 12) open = { w: "rg", t: "Twelve down, counselor. I'm not going to ask. But the story we tell tomorrow is going to need to be a good one, because theirs is going to be that a lawyer shot his way through Langley." };
+  else if (alarms >= 4) open = { w: "rg", t: "Four alarms. Half of Virginia heard you leave. It doesn't matter — the bag is out, and a loud exit is still an exit." };
+  else open = { w: "rg", t: "Clean enough. They saw a shadow and lost it, which is exactly what you want a federal building to remember about you." };
+  const bf = bfGot >= bfAll
+    ? { w: "kjp", t: "And I have the whole file. Every floor, every line. They kept the receipts for their own conspiracy — and I have all twenty-four of them." }
+    : bfGot > 0
+      ? { w: "kjp", t: "I got " + bfGot + " lines of the file. The rest is still in that building — which means I'm going back." }
+      : null;
+  BR = { n: 0, lines: [open].concat(bf ? [bf] : [], OUTRO), i: 0, chars: 0, done: false, outro: true };
   STATE = "brief"; SFX.codec();
 }
 function drawBrief(dt){
@@ -551,7 +587,8 @@ function computeResult(){
   /* the AGGRAVATED dial pays too — applied BEFORE the ceiling, so the 300k
      server bound stays a proof (opMax × 6 ops = 270k) no matter what stacks */
   if (LV.aggMult > 1) score = Math.round(score * LV.aggMult);
-  score = Math.min(score, SC.opMax);                          // never outgrow the board's ceiling
+  if (typeof DEEP !== "undefined" && DEEP.on && DEEP.mods && DEEP.mods.score) score = Math.round(score * DEEP.mods.score);   // v2.0.33 GREED
+  score = Math.min(score, SC.opMax);                          // never outgrow the board's ceiling — after EVERY multiplier
   const res = { score, time: LV.time, ghost, pacifist, combat: s.combats > 0, kills: s.kills, kos: s.kos,
                 intel: s.intel, intelMax: LV.picks.filter(q => q.k === "intel").length,
                 alarms: s.alarms, diff: OPT.diff,
@@ -658,7 +695,17 @@ function drawDebrief(dt){
        (difficulty and the confiscated piece) rather than start a plain op */
     const nxt = DB.n < 6 && !DB.daily;
     if (DB.daily) btn(90, H - 120, 280, 52, "📅 TODAY'S BEST — " + dailyBest().toLocaleString(), () => { STATE = "title"; }, { fs: 12 });
-    else if (nxt) btn(90, H - 120, 280, 52, "▶ NEXT: " + LEVELS[DB.n + 1].name, () => startBrief(DB.n + 1));
+    else if (nxt){
+      btn(90, H - 120, 280, 52, "▶ NEXT: " + LEVELS[DB.n + 1].name, () => startBrief(DB.n + 1));
+      /* v2.0.38 THE TEASE. Under the NEXT button, one line of what waits on
+         the next floor — the sub-title the level already carries plus its
+         guard count. Cliffhangers are how a campaign is finished in one
+         sitting instead of one floor a week. */
+      const nx = LEVELS[DB.n + 1];
+      g.font = "700 10px Verdana"; g.fillStyle = "#57717f";
+      g.fillText("▸ " + (nx.sub || "") + "  ·  " + ((nx.guards || []).length) + " on the floor"
+        + ((nx.guards || []).some(gd => gd.kind === "director") ? "  ·  THE DIRECTOR IS ON SITE" : ""), 90, H - 62);
+    }
     else btn(90, H - 120, 280, 52, "▶ THE VERDICT", () => startOutro());
     btn(390, H - 120, 170, 52, "↻ REPLAY", () => { if (DB.daily) startDaily(); else startBrief(DB.n); });
     btn(580, H - 120, 170, 52, "☰ MENU", () => { STATE = "select"; });
@@ -742,9 +789,45 @@ function drawDead(){
   g.fillText(quote, W / 2, H / 2 + 14);
   g.font = "700 11px Verdana"; g.fillStyle = "#7c8ba3";
   g.fillText("★".repeat(LV && LV.heat ? LV.heat : 0) + (LV && LV.heat ? "  they were at " + HEAT_NAMES[LV.heat] : ""), W / 2, H / 2 + 40);
+  /* v2.0.35 THE POST-MORTEM. "MISSION FAILED" told you nothing you could
+     act on. Now: what killed you, and the one stat that would have changed
+     it. A death you understand is a retry; a death you don't is a quit. */
+  if (LV){
+    const s = LV.stats || {};
+    const cause = P && P.hurtFrom ? "gunfire" : "the building";
+    const tips = [];
+    if ((s.spotted || 0) >= 3) tips.push("spotted " + s.spotted + "× — the cones on the TAC-MAP are the whole game");
+    if ((s.alarms || 0) > 0) tips.push(s.alarms + " alarm" + (s.alarms > 1 ? "s" : "") + " — analysts and panels are timers, not scenery");
+    if (P && P.stam !== undefined && P.stam < 0.1) tips.push("you died WINDED — sprint is a burst, not a gait");
+    if ((s.shots || 0) > 12 && (s.kills || 0) < 2) tips.push(s.shots + " rounds for " + (s.kills || 0) + " down — spray is loud and misses");
+    if (!tips.length) tips.push((LV.time || 0) < 30 ? "you rushed — the first 30s of a floor are for watching, not moving" : "next time: hold the corner and let the search pass you");
+    g.font = "700 11px Verdana"; g.fillStyle = "#9db4cc";
+    g.fillText("cause: " + cause + "  ·  " + fmtTime(LV.time || 0) + " on the floor", W / 2, H / 2 + 58);
+    g.fillStyle = "#ffbe46";
+    g.fillText("▸ " + tips[0], W / 2, H / 2 + 76);
+  }
+  /* v2.0.36 DEEP COVER RUN CARD — the run was the unit; say what it was. */
+  if (typeof DEEP !== "undefined" && DEEP.lastRun){
+    const r2 = DEEP.lastRun, best = (PROG.deep && PROG.deep.depth) || 0;
+    g.font = "900 14px Arial Black"; g.fillStyle = "#ff9d5b";
+    g.fillText("DEEP COVER — DEPTH " + r2.depth + " · " + (r2.score || 0).toLocaleString() + " pts"
+      + (r2.depth >= best && best > 0 ? "  ·  NEW RECORD" : "  ·  best D" + best), W / 2, H / 2 + 100);
+    if (DEEP.taken && DEEP.taken.length){
+      g.font = "700 10px Verdana"; g.fillStyle = "#c9a86a";
+      g.fillText("build: " + DEEP.taken.map(k => (DEEP_BOONS.find(b => b.k === k) || {}).name || k).join(" · "), W / 2, H / 2 + 118);
+    }
+  }
   g.textAlign = "left";
-  btn(W / 2 - 230, H / 2 + 60, 220, 50, "↻ RETRY OP", () => startLevel(LV.n));
-  btn(W / 2 + 10, H / 2 + 60, 220, 50, "☰ MENU", () => { STATE = "select"; });
+  const by2 = (typeof DEEP !== "undefined" && DEEP.lastRun) ? H / 2 + 136 : H / 2 + 92;
+  /* v2.0.41 RUN IT BACK. A dead DEEP COVER run's first button is a NEW RUN,
+     not "retry op" — retrying a single floor of an ended run made no sense
+     and dumped you into a floor with no run behind it. And the daily's is
+     "again", re-arming the contract. The button under your thumb after a
+     death should always be the thing you actually want to press. */
+  if (typeof DEEP !== "undefined" && DEEP.lastRun) btn(W / 2 - 230, by2, 220, 50, "🕳 NEW RUN", () => { DEEP.lastRun = null; startDeep(); });
+  else if (typeof DAILY_RUN !== "undefined" && DAILY_RUN) btn(W / 2 - 230, by2, 220, 50, "📅 AGAIN", () => startDaily());
+  else btn(W / 2 - 230, by2, 220, 50, "↻ RETRY OP", () => startLevel(LV.n));
+  btn(W / 2 + 10, by2, 220, 50, "☰ MENU", () => { if (typeof DEEP !== "undefined") DEEP.lastRun = null; STATE = "select"; });
   dispatchClicks();
 }
 

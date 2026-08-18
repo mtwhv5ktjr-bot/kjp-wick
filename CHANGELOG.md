@@ -3,6 +3,18 @@
 Every entry is a shipped, verified change. The top entry MUST match `VERSION` in
 `js/core.js` — the ship gate refuses to deploy if it does not, so nothing ships unnumbered.
 
+## 2.0.41 — the campaign and DEEP COVER become a run
+- **2.0.32** DEEP COVER carries — hearts, ammo, gadgets and stamina persist between floors (clamped to the new max). Depth 8 feels like depth 8: you arrive with what you saved
+- **2.0.33** BOONS — every third depth, pick one of three: SECOND WIND, SOFT SOLES, DEEP POCKETS, SUPPLY DROP, NIGHT EYES, IRON LUNGS, GREED (×1.4 score, −1 heart). They stack, they last the run; "how far" becomes "what build"
+- **2.0.34** a cleared floor heals ONE heart — the only healing in the run; a bad floor still costs you into the next
+- **2.0.35** the POST-MORTEM — the death screen says what killed you and the one stat that would have changed it. A death you understand is a retry
+- **2.0.36** DEEP COVER run card on death — depth, score, NEW RECORD, and the build you died with
+- **2.0.37** the ending knows how you played — the codec opens on YOUR campaign (ghost / twelve down / four alarms / clean) and whether you have the whole Black File, before the shared ending
+- **2.0.38** the tease — under NEXT on the debrief, one line of what waits: the floor's subtitle, guard count, and THE DIRECTOR IS ON SITE when he is
+- **2.0.39** the descent strip — six floors as a vertical section of Langley on the select screen, lit as you clear them; the unlit floors below are the pull
+- **2.0.40** milestones — new record depth and depths 5/10/15 called out with the sting the moment they happen
+- **2.0.41** run it back — after a DEEP COVER death the first button is NEW RUN (retrying one floor of an ended run made no sense); after a daily death it is AGAIN, re-arming the contract
+
 ## 2.0.31 — the tools: more verbs, and guns that feel like guns
 - **2.0.21** FLASHBANG — blinds everyone facing it for 4s (guards drop target and detection); loud; and honest — look at it yourself and your screen whites out too
 - **2.0.22** WIRE CUTTER — kills one camera or laser silently and permanently; must be within reach. Answers "a camera on the only route" without a firefight
