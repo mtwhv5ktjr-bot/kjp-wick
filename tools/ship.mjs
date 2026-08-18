@@ -41,9 +41,13 @@ console.log("\nGATE PASSED — v" + ver);
 if (!process.argv.includes("--deploy")) process.exit(0);
 
 console.log("\nDEPLOY v" + ver);
-const sh = (cmd, args, opts) => spawnSync(cmd, args, Object.assign({ cwd: root, encoding: "utf8", shell: true }, opts || {}));
+/* npx lives beside the node that is running this script — put its folder on
+   PATH so a plain shell (which has no global node) can find it */
+const nodeDir = dirname(NODE);
+const env = Object.assign({}, process.env, { PATH: nodeDir + ";" + (process.env.PATH || "") });
+const sh = (cmd, args, opts) => spawnSync(cmd, args, Object.assign({ cwd: root, encoding: "utf8", shell: true, env }, opts || {}));
 sh("git", ["push", "-q", "origin", "HEAD"]);
-const dep = sh("npx", ["vercel", "deploy", "--prod", "--yes"]);
+const dep = sh(join(nodeDir, "npx.cmd"), ["vercel", "deploy", "--prod", "--yes"]);
 const url = (/"url":\s*"([^"]+)"/.exec(dep.stdout + dep.stderr) || [])[1];
 ok(!!url, "vercel deployed: " + (url || "(no url in output)"));
 /* verify the LIVE build carries this version — the deploy step can succeed and
