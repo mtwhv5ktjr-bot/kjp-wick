@@ -201,7 +201,14 @@ function r3dProbeOverrides(){
     const img = new Image();
     img.onload = () => {
       R3DMAT.overrides.set(n + "_" + kind, img);
-      R3DMAT.cache.delete(n);                       // rebuilt with the override next build
+      /* the cache key is name+opts, so a bare-name delete never hit a real
+         entry and a late-arriving texture was silently ignored until reload.
+         Drop every cached variant of this material and dispose it — the
+         override replaces it on the next build. */
+      for (const [k, m] of [...R3DMAT.cache]) if (k.startsWith(n + "{") || k === n){
+        R3DMAT.cache.delete(k);
+        try { m.map && m.map.dispose(); m.normalMap && m.normalMap.dispose(); m.roughnessMap && m.roughnessMap.dispose(); m.dispose(); } catch(e){}
+      }
       if (R3D.level >= 0) R3D.level = -1;           // force a scene rebuild
     };
     img.src = "assets/tex/" + n + "_" + kind + ".png";

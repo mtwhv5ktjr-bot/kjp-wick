@@ -306,8 +306,11 @@ function playerUpdate(dt){
     if (Math.hypot(dx, dy) > 24){
       const a = Math.atan2(dy, dx);
       /* touch aim is a screen direction — in 3D, rotate it by the camera yaw
-         so "up on the pad" means "where the camera looks", matching WASD */
-      P.ang = aw !== null || (typeof R3D !== "undefined" && R3D.on) ? a + R3D._ca + Math.PI / 2 : a;
+         so "up on the pad" means "where the camera looks", matching WASD.
+         EASED, like the mouse: a thumb jitters far more than a mouse and a
+         direct write turned every tremor into a camera whip. */
+      const want = aw !== null || (typeof R3D !== "undefined" && R3D.on) ? a + R3D._ca + Math.PI / 2 : a;
+      P.ang += angDiff(P.ang, want) * Math.min(0.9, 0.5 * (OPT.sens || 1));
     }
   } else if (!IS_TOUCH || MOUSE.moved > 4){
     if (aw){

@@ -51,7 +51,10 @@ function r3dInit(){
     console.warn("KJP 3D: WebGL unavailable — " + (e && e.message));
     return false;
   }
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  /* phones ship at 3x DPR — rendering 3x pixels for a 6-inch screen is the
+     single most expensive mistake a mobile WebGL game makes. Cap at 1.5 on
+     touch; the governor can go lower. */
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, IS_TOUCH ? 1.5 : 2));
   renderer.setSize(W, H, false);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -1208,6 +1211,14 @@ function r3dAimScreen(){
    view with ?view=2d. A black screen is worse than a top-down game. */
 function r3dBoot(){
   if (/[?&]view=2d/.test(location.search)) { R3D.on = false; return; }
+  /* MOBILE TIER at boot: a phone starts at MEDIUM (no bloom, no shadows,
+     pixelRatio ≤1.5) rather than discovering it cannot hold 60 and stepping
+     down while the player watches. The governor still steps UP if the device
+     turns out to have headroom. Only when the player has not chosen a tier. */
+  if (IS_TOUCH && OPT.quality === "auto" && OPT._tierSeeded !== 1){
+    OPT.bloom = 0; OPT.shadows = 0; OPT._tierSeeded = 1; saveOpt();
+    if (typeof R3D_GOV !== "undefined") R3D_GOV.tier = 2;
+  }
   R3D.on = r3dAvailable() && r3dInit();
   if (!R3D.on) console.warn("KJP: falling back to the 2D renderer");
   else r3dProbeOverrides();          // dropped-in texture maps take over async
